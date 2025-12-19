@@ -1,7 +1,5 @@
-import type { DataRepository, DataSourceConfig, Project } from './types';
-import { mapRowToProject } from './projectMapper';
-
-const DEFAULT_REVENUE_TARGET = 10_000_000;
+import type { DataRepository, DataSourceConfig, Opportunity } from './types';
+import { mapRowToOpportunity } from './projectMapper';
 
 function parseCsv(content: string): string[][] {
   const rows: string[][] = [];
@@ -64,7 +62,7 @@ function normalizeRows(rows: string[][]): string[][] {
   return rows.filter((row) => row.some((value) => value.trim() !== ''));
 }
 
-async function fetchProjectsFromCsv(config: DataSourceConfig['localCsv']): Promise<Project[]> {
+async function fetchOpportunitiesFromCsv(config: DataSourceConfig['localCsv']): Promise<Opportunity[]> {
   if (!config) {
     throw new Error('Missing local CSV configuration');
   }
@@ -78,42 +76,32 @@ async function fetchProjectsFromCsv(config: DataSourceConfig['localCsv']): Promi
   const rows = normalizeRows(parseCsv(content));
   const [, ...records] = rows;
 
-  return records.map((row, index) => mapRowToProject(row, index));
+  return records.map((row, index) => mapRowToOpportunity(row, index));
 }
 
 export function createLocalCsvRepository(config: DataSourceConfig): DataRepository {
-  let cache: Project[] = [];
-  let lastFetched: number | null = null;
-  const revenueTarget = config.revenueTarget ?? DEFAULT_REVENUE_TARGET;
+  let cache: Opportunity[] = [];
+  const revenueTarget = config.revenueTarget ?? 0;
 
-  async function refreshIfStale(): Promise<Project[]> {
-    const now = Date.now();
-    const shouldRefresh = !lastFetched || now - lastFetched > config.refreshIntervalMs || cache.length === 0;
-    if (shouldRefresh) {
-      cache = await fetchProjectsFromCsv(config.localCsv);
+  async function ensureCache(): Promise<Opportunity[]> {
+    if (cache.length === 0) {
+      cache = await fetchOpportunitiesFromCsv(config.localCsv);
       cache = cache.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-      lastFetched = now;
     }
     return cache;
   }
 
   return {
     isReadOnly: true,
-    async getProjects() {
-      return refreshIfStale();
+    async getOpportunities() {
+      return ensureCache();
     },
-    async getProject(id: string) {
-      const projects = await refreshIfStale();
-      return projects.find((project) => project.id === id) ?? null;
-    },
-    async updateProject() {
-      throw new Error('Read-only data source: updates are not permitted.');
+    async getOpportunity(id: string) {
+      const opportunities = await ensureCache();
+      return opportunities.find((opportunity) => opportunity.id === id) ?? null;
     },
     async getRevenueTarget() {
       return revenueTarget;
-    },
-    async setRevenueTarget() {
-      throw new Error('Read-only data source: updates are not permitted.');
     },
   };
 }

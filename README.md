@@ -1,13 +1,13 @@
 # Revenue Path Planner
 
-A single-page, read-only visualization to explore paths to a revenue target using Salesforce pipeline exports via Google Sheets. This project follows the guidelines in `spec.md`, `requirements.md`, and `task-list.md`.
+A single-page, read-only visualization for exploring revenue target scenarios as a NYT-style “Paths-to-Target” decision tree. This project follows the guidelines in `docs/spec.md`, `docs/visual_spec.md`, `docs/requirements.md`, and `docs/task-list.md`.
 
 ## Getting started
 
 > Note: package installation from the public registry may be restricted in this environment. If installs fail, use `npm install --ignore-scripts` to generate a lockfile and vendor dependencies separately.
 
 1. Ensure Node.js 18+ is available.
-2. Copy `.env.example` to `.env.local` and set Google Sheets credentials or the local CSV path (see below).
+2. (Optional) Copy `.env.example` to `.env.local` and set the CSV path or revenue target override.
 3. Install dependencies:
    ```bash
    npm install
@@ -21,21 +21,14 @@ A single-page, read-only visualization to explore paths to a revenue target usin
    npm run build
    ```
 
-### Google Sheets configuration
-
-The app reads opportunities from a Google Sheet (tab: `data`, range: `A1:P31`) via the Sheets API. Configure these environment variables (Vite expects the `VITE_` prefix):
-
-- `VITE_GOOGLE_SHEETS_ID` — spreadsheet ID
-- `VITE_GOOGLE_SHEETS_RANGE` — range (e.g., `data!A1:P31`)
-- `VITE_GOOGLE_API_KEY` — API key with read access to the sheet
-- `VITE_REFRESH_INTERVAL_MS` — optional; defaults to 24h
-- `VITE_REVENUE_TARGET` — optional override of the default $10M target
-
-If configuration is missing, the UI falls back to the bundled mock repository for local exploration. Keep API keys out of source control; store them in untracked `.env.local`.
-
 ### Local CSV configuration
 
-If you prefer a local CSV, add a file under `public/data/` and set `VITE_LOCAL_CSV_PATH` (for example, `/data/opportunities.csv`). When `VITE_LOCAL_CSV_PATH` is present, the app will use the local CSV instead of Google Sheets.
+The app reads opportunities from a local CSV at `/public/data`. By default it looks for `/data/opportunities.csv`. To override the path, set:
+
+- `VITE_LOCAL_CSV_PATH` — example: `/data/opportunities.csv`
+- `VITE_REVENUE_TARGET` — optional override for the default $30M target
+
+If no CSV is found or the request fails, the UI falls back to the bundled mock repository for local exploration.
 
 **Expected CSV header (exact order):**
 ```csv
@@ -45,16 +38,16 @@ Account Name,Opportunity Name,Ad Hoc TCV,PWIN,Project Start Date,Top Priority,Po
 Populate the remaining rows with your opportunity data, using the same column order as above.
 
 ## Project structure
-- `src/components`: UI components (visualization shell, lists, controls).
-- `src/data`: Domain types and repository contracts.
-- `src/domain`: Calculation and path logic (placeholder for future phases).
+- `src/components`: UI surfaces (control strip, scoreboard, path tree, scenario cards).
+- `src/data`: CSV repository, mappers, and domain types.
+- `src/domain`: Decision-tree logic, path counting, URL state helpers.
 - `src/state`: Global state (Zustand store + repository wiring).
-- `src/styles`: Shared styles.
+- `src/styles`: Global styles for the editorial layout.
 
 ## Coding conventions
 - TypeScript strict mode; functional React components and hooks.
-- Domain-first naming (`Project`, `pWin`, `tcv`, `BAPStage`).
+- Domain-first naming (`Opportunity`, `pWin`, `tcv`, `BAPStage`).
 - Keep calculations pure and testable; avoid try/catch around imports.
 
 ## Roadmap
-Progress is tracked in `task-list.md`. The current prototype loads mock opportunities, lets you toggle win/loss status, filter by pWin/BAP stage/priority, and shows suggested paths toward the target. Upcoming work includes real data adapters, deeper path visualization, URL sharing, and automated tests.
+Progress is tracked in `docs/task-list.md`. The current prototype loads CSV data (or mock fallback), renders a binary decision tree, supports hover/click/double-click interactions, and encodes scenario state in the URL.
