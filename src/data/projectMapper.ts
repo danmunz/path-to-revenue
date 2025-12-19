@@ -1,4 +1,4 @@
-import type { BAPStage, Project } from './types';
+import type { BAPStage, Opportunity } from './types';
 
 function toBoolean(value: string | undefined): boolean {
   if (!value) return false;
@@ -49,29 +49,26 @@ function normalizeBapStage(value: string | undefined): BAPStage {
   }
 }
 
-function deriveStatus(bapStage: BAPStage, closed: boolean): Project['status'] {
-  if (closed && bapStage === 'closed-won') return 'won';
-  if (closed) return 'lost';
-  return 'open';
+function normalizePWin(value: string | undefined): number {
+  const raw = toNumber(value);
+  if (raw > 1) {
+    return Math.min(raw / 100, 1);
+  }
+  return Math.min(Math.max(raw, 0), 1);
 }
 
-export function mapRowToProject(row: string[], index: number): Project {
+export function mapRowToOpportunity(row: string[], index: number): Opportunity {
   const account = row[0] ?? `Row ${index + 1}`;
   const name = row[1] ?? `Opportunity ${index + 1}`;
   const tcv = toNumber(row[2]);
-  const pWin = toNumber(row[3]);
+  const pWin = normalizePWin(row[3]);
   const startDate = row[4] ? new Date(row[4]) : new Date();
   const topPriority = toBoolean(row[5]);
   const portfolioPriority = toBoolean(row[6]) || topPriority;
-  const q1 = toNumber(row[8]);
-  const q2 = toNumber(row[9]);
-  const q3 = toNumber(row[10]);
-  const q4 = toNumber(row[11]);
   const owner = row[12]?.trim() || undefined;
   const bapStage = normalizeBapStage(row[13]);
   const closed = toBoolean(row[14]);
   const periodMonths = row[15] ? toNumber(row[15]) : undefined;
-  const status = deriveStatus(bapStage, closed);
 
   return {
     id: `${account}-${name}-${index + 1}`,
@@ -80,12 +77,10 @@ export function mapRowToProject(row: string[], index: number): Project {
     tcv,
     pWin,
     startDate,
-    status,
     closed,
     bapStage,
     topPriority,
     portfolioPriority,
-    quarterlyRevenue: { q1, q2, q3, q4 },
     owner,
     periodMonths,
   };

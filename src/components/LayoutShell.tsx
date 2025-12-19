@@ -1,35 +1,25 @@
 import type { ReactNode } from 'react';
-import { RefreshButton } from './RefreshButton';
-import { useAppState } from '../state/appState';
 
 type LayoutShellProps = {
-  header: {
-    title: string;
-    subtitle?: string;
-  };
-  status: {
-    isLoading: boolean;
-    lastUpdated: Date | null;
-  };
+  title: string;
+  subtitle?: string;
+  isLoading: boolean;
   children: ReactNode;
 };
 
-export function LayoutShell({ header, status, children }: LayoutShellProps) {
-  const { hydrateFromRepository } = useAppState();
-
+export function LayoutShell({ title, subtitle, isLoading, children }: LayoutShellProps) {
   return (
     <div className="layout-shell">
       <header className="top-bar">
         <div>
-          <p className="eyebrow">Dashboard</p>
-          <h1>{header.title}</h1>
-          {header.subtitle && <p className="subtitle">{header.subtitle}</p>}
+          <p className="eyebrow">Revenue Explorer</p>
+          <h1>{title}</h1>
+          {subtitle && <p className="subtitle">{subtitle}</p>}
         </div>
         <div className="status-actions">
-          <RefreshButton onRefresh={hydrateFromRepository} isLoading={status.isLoading} />
-          <p className="timestamp" aria-live="polite">
-            {status.lastUpdated ? `Updated ${status.lastUpdated.toLocaleTimeString()}` : 'Not yet loaded'}
-          </p>
+          <span className="status-pill" aria-live="polite">
+            {isLoading ? 'Loading pipeline…' : 'Pipeline loaded'}
+          </span>
         </div>
       </header>
       <main>{children}</main>

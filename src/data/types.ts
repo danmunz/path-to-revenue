@@ -9,57 +9,32 @@ export type BAPStage =
   | 'closed-no-bid'
   | 'closed-canceled';
 
-type ProjectStatus = 'open' | 'won' | 'lost';
-
-export type QuarterlyRevenue = {
-  q1: number;
-  q2: number;
-  q3: number;
-  q4: number;
-};
-
-export type Project = {
+export type Opportunity = {
   id: string;
   account: string;
   name: string;
   tcv: number;
   pWin: number;
   startDate: Date;
-  status: ProjectStatus;
   closed: boolean;
   bapStage: BAPStage;
   topPriority: boolean;
   portfolioPriority: boolean;
-  quarterlyRevenue: QuarterlyRevenue;
   owner?: string;
   periodMonths?: number;
 };
 
 export type DataRepository = {
   isReadOnly: boolean;
-  getProjects: () => Promise<Project[]>;
-  getProject: (id: string) => Promise<Project | null>;
-  updateProject: (id: string, data: Partial<Project>) => Promise<Project>;
+  getOpportunities: () => Promise<Opportunity[]>;
+  getOpportunity: (id: string) => Promise<Opportunity | null>;
   getRevenueTarget: () => Promise<number>;
-  setRevenueTarget: (value: number) => Promise<void>;
 };
 
 export type DataSourceConfig = {
-  type: 'google-sheets' | 'local-csv' | 'salesforce';
-  googleSheets?: {
-    spreadsheetId: string;
-    range: string;
-    apiKey?: string;
-    serviceAccountKey?: string;
-  };
+  type: 'local-csv';
   localCsv?: {
     path: string;
   };
-  salesforce?: {
-    instanceUrl: string;
-    clientId: string;
-    clientSecret: string;
-  };
   revenueTarget?: number;
-  refreshIntervalMs: number;
 };
