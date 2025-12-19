@@ -1,5 +1,6 @@
 import { buildPathTreeLayout } from '../domain/pathTreeLayout';
 import type { EffectiveProject } from '../domain/scenarioCalculator';
+import { useAppState } from '../state/appState';
 
 type PathTreeProps = {
   projects: EffectiveProject[];
@@ -14,6 +15,8 @@ function formatCurrency(value: number) {
 }
 
 export function PathTree({ projects }: PathTreeProps) {
+  const { setSelection } = useAppState();
+
   if (!projects.length) {
     return <p className="empty">Visualization will appear once opportunities are loaded.</p>;
   }
