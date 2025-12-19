@@ -33,8 +33,6 @@ export type PathTreeLayout = {
   columnWidth: number;
   columnGap: number;
   rowGap: number;
-  isTruncated: boolean;
-  trimmedCount: number;
 };
 
 const MIN_NODE_HEIGHT = 40;
@@ -46,7 +44,6 @@ const SUMMARY_WIDTH = 240;
 const ROOT_WIDTH = 160;
 const COLUMN_GAP = 120;
 const ROW_GAP = 18;
-const MAX_BRANCH_DEPTH = 8;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -61,10 +58,7 @@ function scaleHeight(value: number, maxValue: number, minHeight: number, maxHeig
 export function buildPathTreeLayout(projects: EffectiveProject[]): PathTreeLayout {
   const orderedProjects = [...projects].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   const totalPotential = orderedProjects.reduce((sum, project) => sum + project.tcv, 0);
-  const isTruncated = orderedProjects.length > MAX_BRANCH_DEPTH;
-  const trimmedProjects = isTruncated ? orderedProjects.slice(0, MAX_BRANCH_DEPTH) : orderedProjects;
-  const trimmedCount = Math.max(orderedProjects.length - trimmedProjects.length, 0);
-  const maxTcv = Math.max(...trimmedProjects.map((project) => project.tcv), totalPotential);
+  const maxTcv = Math.max(...orderedProjects.map((project) => project.tcv), totalPotential);
 
   const nodes = new Map<string, PathTreeNode>();
   const links: PathTreeLink[] = [];
@@ -86,13 +80,13 @@ export function buildPathTreeLayout(projects: EffectiveProject[]): PathTreeLayou
     depth: number,
     totals: { totalWon: number; winCount: number }
   ): number {
-    if (depth >= trimmedProjects.length) {
+    if (depth >= orderedProjects.length) {
       const summaryHeight = scaleHeight(totals.totalWon, maxTcv, MIN_SUMMARY_HEIGHT, MAX_SUMMARY_HEIGHT);
       const yCenter = nextLeafY + summaryHeight / 2;
       const summaryId = `summary-${nodeIndex++}`;
       createNode({
         id: summaryId,
-        depth: trimmedProjects.length + 1,
+        depth: orderedProjects.length + 1,
         x: 0,
         y: yCenter,
         width: SUMMARY_WIDTH,
@@ -110,7 +104,7 @@ export function buildPathTreeLayout(projects: EffectiveProject[]): PathTreeLayou
       return yCenter;
     }
 
-    const project = trimmedProjects[depth];
+    const project = orderedProjects[depth];
     const childCenters: number[] = [];
 
     (['won', 'lost'] as Outcome[]).forEach((outcome) => {
@@ -183,7 +177,5 @@ export function buildPathTreeLayout(projects: EffectiveProject[]): PathTreeLayou
     columnWidth: COLUMN_WIDTH,
     columnGap: COLUMN_GAP,
     rowGap: ROW_GAP,
-    isTruncated,
-    trimmedCount,
   };
 }

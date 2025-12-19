@@ -1,5 +1,6 @@
 import { buildPathTreeLayout } from '../domain/pathTreeLayout';
 import type { EffectiveProject } from '../domain/scenarioCalculator';
+import { useAppState } from '../state/appState';
 
 type PathTreeProps = {
   projects: EffectiveProject[];
@@ -14,6 +15,8 @@ function formatCurrency(value: number) {
 }
 
 export function PathTree({ projects }: PathTreeProps) {
+  const { setSelection } = useAppState();
+
   if (!projects.length) {
     return <p className="empty">Visualization will appear once opportunities are loaded.</p>;
   }
@@ -28,12 +31,6 @@ export function PathTree({ projects }: PathTreeProps) {
         <p className="muted">
           Each column represents a decision point. Node size scales with opportunity TCV, and opacity reflects pWin.
         </p>
-        {layout.isTruncated && (
-          <p className="muted path-tree__note">
-            Showing the first {projects.length - layout.trimmedCount} opportunities. {layout.trimmedCount} more are
-            collapsed to keep the layout responsive.
-          </p>
-        )}
       </div>
       <div className="path-tree__canvas" style={{ height: layout.height, width: layout.width }}>
         <svg className="path-tree__links" viewBox={`0 0 ${layout.width} ${layout.height}`}>

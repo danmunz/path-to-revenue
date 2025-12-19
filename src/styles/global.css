@@ -294,10 +294,6 @@ main {
   font-size: 0.85rem;
 }
 
-.path-tree__note {
-  margin-top: 0.35rem;
-}
-
 .path-list {
   list-style: none;
   padding: 0;
