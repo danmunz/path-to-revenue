@@ -241,6 +241,25 @@ main {
   border: 1px solid #d0e0ff;
   border-radius: 0.75rem;
   min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.path-tree__node--open {
+  background: #e0ecff;
+  border-color: #b7cdfd;
+}
+
+.path-tree__node--won {
+  background: #ecfeff;
+  border-color: #67e8f9;
+  box-shadow: 0 0 0 1px rgba(14, 116, 144, 0.2);
+}
+
+.path-tree__node--lost {
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 .node-title {
