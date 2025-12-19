@@ -9,8 +9,16 @@ import { buildDecisionTree, countPaths } from './domain/decisionTree';
 import { parseSelectionsFromUrl, syncSelectionsToUrl } from './domain/urlState';
 
 function App() {
-  const { hydrateFromRepository, opportunities, isLoading, selections, revenueTarget, setSelections } =
-    useAppState();
+  const {
+    hydrateFromRepository,
+    opportunities,
+    isLoading,
+    selections,
+    revenueTarget,
+    backlogRevenue,
+    truncatedCount,
+    setSelections,
+  } = useAppState();
   const [slowMotion, setSlowMotion] = useState(false);
 
   useEffect(() => {
@@ -46,8 +54,8 @@ function App() {
   }, []);
 
   const decisionTree = useMemo(
-    () => buildDecisionTree(opportunities, selections, revenueTarget),
-    [opportunities, selections, revenueTarget]
+    () => buildDecisionTree(opportunities, selections, revenueTarget, backlogRevenue),
+    [opportunities, selections, revenueTarget, backlogRevenue]
   );
   const counts = useMemo(
     () => countPaths(decisionTree.root, opportunities.length),
@@ -57,12 +65,13 @@ function App() {
   return (
     <LayoutShell title="Revenue Path Planner" subtitle="Paths-to-target decision tree" isLoading={isLoading}>
       <ControlStrip opportunities={opportunities} selections={selections} />
-      <Scoreboard counts={counts} revenueTarget={revenueTarget} />
+      <Scoreboard counts={counts} revenueTarget={revenueTarget} backlogRevenue={backlogRevenue} />
       <PathTree
         opportunities={opportunities}
         tree={decisionTree}
         revenueTarget={revenueTarget}
         slowMotion={slowMotion}
+        truncatedCount={truncatedCount}
       />
       <ScenarioCards opportunities={opportunities} />
     </LayoutShell>
