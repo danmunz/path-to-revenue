@@ -66,15 +66,18 @@ function createNode(params: Partial<TreeNode> & Pick<TreeNode, 'id' | 'depth' | 
 export function buildDecisionTree(
   opportunities: Opportunity[],
   selections: ScenarioSelection,
-  revenueTarget: number
+  revenueTarget: number,
+  startingRevenue = 0
 ): DecisionTree {
   const sorted = [...opportunities].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   const root = createNode({
     id: 'root',
     depth: 0,
-    revenue: sorted
-      .filter((opp) => getResolvedOutcome(opp, selections) === 'win' && opp.closed)
-      .reduce((sum, opp) => sum + opp.tcv, 0),
+    revenue:
+      startingRevenue +
+      sorted
+        .filter((opp) => getResolvedOutcome(opp, selections) === 'win' && opp.closed)
+        .reduce((sum, opp) => sum + opp.tcv, 0),
     probability: 1,
     resolved: sorted.reduce<Record<string, Outcome>>((acc, opp) => {
       const outcome = getResolvedOutcome(opp, selections);
