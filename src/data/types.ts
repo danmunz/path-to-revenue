@@ -45,12 +45,15 @@ export type DataRepository = {
 };
 
 export type DataSourceConfig = {
-  type: 'google-sheets' | 'salesforce';
+  type: 'google-sheets' | 'local-csv' | 'salesforce';
   googleSheets?: {
     spreadsheetId: string;
     range: string;
     apiKey?: string;
     serviceAccountKey?: string;
+  };
+  localCsv?: {
+    path: string;
   };
   salesforce?: {
     instanceUrl: string;

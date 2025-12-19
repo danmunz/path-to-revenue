@@ -4,3 +4,5 @@ dist
 .vscode
 .env
 .env.local
+public/data/*.csv
+!public/data/opportunities.csv
