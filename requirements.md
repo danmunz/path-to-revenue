@@ -51,7 +51,7 @@
 - **Data Fetching:** Centralized in data repository layer; UI triggers manual refresh via repository without exposing implementation details.
 - **Form Handling:** Simple controlled inputs for filters and toggles; validation kept minimal and client-side.
 - **API & Error Handling:** Surface read-only errors via non-blocking banners/toasts; log details to console in development.
-- **Environment Variables:** Use Vite environment variables (`VITE_`) for sheet configuration and refresh interval; never commit secrets.
+- **Environment Variables:** Use Vite environment variables (`VITE_`) for sheet configuration and refresh interval (default: daily); never commit secrets.
 
 ## Performance
 - Aim for recalculation cycles under 100ms; memoize derived data and avoid unnecessary re-renders.

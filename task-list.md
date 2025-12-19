@@ -11,6 +11,7 @@
 - Implement Google Sheets repository: sheet column mapping, refresh interval, manual refresh, read-only flag.
 - Implement configuration loader for sheet ID/range/auth and refresh interval.
 - Add unit tests for data parsing/mapping and refresh behavior (with mocked Sheets responses).
+- Status: Google Sheets repository and env-driven config loader added (default daily refresh); tests and manual refresh wiring are still pending.
 
 ## Phase 3: Domain Services
 - Build scenario calculator: derive default statuses for closed opportunities; compute totals vs. revenue target; aggregate quarterly rollups.
