@@ -25,10 +25,11 @@ function isFy26(date: Date): boolean {
 
 function prioritizeOpportunities(opportunities: Opportunity[]): Opportunity[] {
   return [...opportunities].sort((a, b) => {
-    if (a.topPriority !== b.topPriority) return a.topPriority ? -1 : 1;
-    if (a.portfolioPriority !== b.portfolioPriority) return a.portfolioPriority ? -1 : 1;
+    const scoreA = a.tcv * a.pWin;
+    const scoreB = b.tcv * b.pWin;
+    if (scoreA !== scoreB) return scoreB - scoreA;
     if (a.tcv !== b.tcv) return b.tcv - a.tcv;
-    return a.startDate.getTime() - b.startDate.getTime();
+    return a.name.localeCompare(b.name);
   });
 }
 

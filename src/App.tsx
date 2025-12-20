@@ -58,8 +58,8 @@ function App() {
     [opportunities, selections, revenueTarget, backlogRevenue]
   );
   const counts = useMemo(
-    () => countPaths(decisionTree.root, opportunities.length),
-    [decisionTree.root, opportunities.length]
+    () => countPaths(opportunities, selections, revenueTarget, backlogRevenue),
+    [opportunities, selections, revenueTarget, backlogRevenue]
   );
 
   return (
@@ -72,6 +72,7 @@ function App() {
         revenueTarget={revenueTarget}
         slowMotion={slowMotion}
         truncatedCount={truncatedCount}
+        counts={counts}
       />
       <ScenarioCards opportunities={opportunities} />
     </LayoutShell>
