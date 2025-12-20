@@ -272,6 +272,12 @@ main {
   align-items: start;
 }
 
+.path-tree__canvas {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .path-tree__labels {
   display: grid;
   gap: 0;
