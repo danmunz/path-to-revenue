@@ -447,4 +447,13 @@ main {
   .control-row__actions {
     justify-content: flex-start;
   }
+
+  .control-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .control-row__actions {
+    justify-content: flex-start;
+  }
 }

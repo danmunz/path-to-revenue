@@ -230,6 +230,13 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     );
   }
 
+  function labelFor(opportunity: Opportunity): string {
+    const selection = selections[opportunity.id];
+    if (selection === 'win') return `If ${opportunity.name} is won…`;
+    if (selection === 'loss') return `If ${opportunity.name} is lost…`;
+    return `If ${opportunity.name} is won/lost…`;
+  }
+
   return (
     <section className={`path-tree ${slowMotion ? 'path-tree--slow' : ''}`}>
       <div className="path-tree__header">
