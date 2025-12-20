@@ -372,6 +372,60 @@ main {
   fill: #22c55e;
 }
 
+.path-tree__labels {
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.path-tree__labels.is-visible {
+  opacity: 1;
+}
+
+.path-tree__label-object {
+  overflow: visible;
+}
+
+.path-tree__label {
+  width: 100%;
+  height: 100%;
+  padding: 0.45rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+}
+
+.path-tree__label-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.path-tree__label-outcome {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.path-tree__label-outcome--win {
+  color: #0f766e;
+}
+
+.path-tree__label-outcome--loss {
+  color: #b91c1c;
+}
+
 .scenario-cards__grid {
   margin-top: 1rem;
   display: grid;
