@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Opportunity } from '../data/types';
 import type { DecisionTree, Outcome, PathCounts, TreeNode } from '../domain/decisionTree';
 import { formatCurrency, getClosedOutcome } from '../domain/decisionTree';
 import { useAppState } from '../state/appState';
+import { Delaunay } from '../vendor/d3-delaunay';
 
 type PathTreeProps = {
   opportunities: Opportunity[];
@@ -18,10 +19,10 @@ type PositionedNode = TreeNode & {
   y: number;
 };
 
-const ROW_HEIGHT = 84;
+const ROW_HEIGHT = 70;
 const COLUMN_WIDTH = 80;
-const MARGIN = { top: 24, right: 100, bottom: 32, left: 200 };
-const MAX_TREE_HEIGHT = 520;
+const MARGIN = { top: 36, right: 100, bottom: 32, left: 80 };
+const MIN_TREE_HEIGHT = 720;
 
 function computeLayout(nodes: TreeNode[]): Map<string, { x: number; y: number }> {
   const leaves: TreeNode[] = [];
@@ -75,6 +76,7 @@ function deriveOpacity(opportunity: Opportunity, outcome: Outcome): number {
 
 export function PathTree({ opportunities, tree, revenueTarget, slowMotion, truncatedCount, counts }: PathTreeProps) {
   const { setSelection, selections } = useAppState();
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -83,11 +85,8 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const layout = useMemo(() => computeLayout(tree.nodes), [tree.nodes]);
   const maxX = Math.max(...Array.from(layout.values()).map((pos) => pos.x), 0);
   const width = MARGIN.left + MARGIN.right + Math.max(maxX, 1) * COLUMN_WIDTH;
-  const rowHeight = Math.max(
-    24,
-    Math.min(ROW_HEIGHT, (MAX_TREE_HEIGHT - MARGIN.top - MARGIN.bottom) / Math.max(sorted.length, 1))
-  );
-  const height = MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * rowHeight;
+  const rowHeight = ROW_HEIGHT;
+  const height = Math.max(MIN_TREE_HEIGHT, MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * rowHeight);
 
   const positionedNodes = useMemo(
     () =>
@@ -108,6 +107,81 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     return map;
   }, [positionedNodes]);
 
+  const decisionNodes = useMemo(
+    () => positionedNodes.filter((node) => node.children.length > 0),
+    [positionedNodes]
+  );
+
+  const delaunay = useMemo(() => {
+    if (decisionNodes.length === 0) return null;
+    return Delaunay.from(
+      decisionNodes,
+      (node) => node.x,
+      (node) => node.y
+    );
+  }, [decisionNodes]);
+
+  const bestLeafMap = useMemo(() => {
+    const map = new Map<string, { id: string; probability: number }>();
+
+    function findBestLeaf(node: TreeNode): { id: string; probability: number } {
+      const cached = map.get(node.id);
+      if (cached) return cached;
+      if (!node.children.length) {
+        const result = { id: node.id, probability: node.probability };
+        map.set(node.id, result);
+        return result;
+      }
+      const best = node.children
+        .map((child) => findBestLeaf(child))
+        .reduce((currentBest, candidate) =>
+          candidate.probability > currentBest.probability ? candidate : currentBest
+        );
+      map.set(node.id, best);
+      return best;
+    }
+
+    if (tree.root) {
+      findBestLeaf(tree.root);
+    }
+    return map;
+  }, [tree.root]);
+
+  const hoveredLeafId = useMemo(() => {
+    if (!hoveredId) return null;
+    return bestLeafMap.get(hoveredId)?.id ?? null;
+  }, [bestLeafMap, hoveredId]);
+
+  const hoveredPathIds = useMemo(() => {
+    if (!hoveredLeafId) return null;
+    const ids = new Set<string>();
+    let current: TreeNode | undefined = nodeMap.get(hoveredLeafId);
+    while (current) {
+      ids.add(current.id);
+      current = current.parentId ? nodeMap.get(current.parentId) : undefined;
+    }
+    return ids;
+  }, [hoveredLeafId, nodeMap]);
+
+  const hoveredSentence = useMemo(() => {
+    if (!hoveredLeafId) return null;
+    const steps: string[] = [];
+    let current: TreeNode | undefined = nodeMap.get(hoveredLeafId);
+    const ordered: TreeNode[] = [];
+    while (current) {
+      ordered.push(current);
+      current = current.parentId ? nodeMap.get(current.parentId) : undefined;
+    }
+    ordered.reverse();
+    ordered.forEach((node) => {
+      if (!node.opportunity || !node.outcome) return;
+      const verb = node.outcome === 'win' ? 'won' : 'lost';
+      steps.push(`${node.opportunity.name} is ${verb}`);
+    });
+    if (!steps.length) return null;
+    return `If ${steps.join(', and ')}`;
+  }, [hoveredLeafId, nodeMap]);
+
   const links = positionedNodes.flatMap((node) =>
     node.children.map((child) => ({
       id: `${node.id}->${child.id}`,
@@ -122,8 +196,18 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const maxProbability = Math.max(...links.map((link) => link.probability), 0.01);
 
   function isActivePath(nodeId: string): boolean {
-    if (!hoveredId) return true;
-    return hoveredId.startsWith(nodeId);
+    if (!hoveredPathIds) return true;
+    return hoveredPathIds.has(nodeId);
+  }
+
+  function handlePointerMove(event: React.PointerEvent<SVGSVGElement>) {
+    if (!svgRef.current || !delaunay || decisionNodes.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * width;
+    const y = ((event.clientY - rect.top) / rect.height) * height;
+    const index = delaunay.find(x, y);
+    const node = decisionNodes[index];
+    setHoveredId(node?.id ?? null);
   }
 
   function handleDoubleClick(node: TreeNode) {
@@ -173,25 +257,31 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
           <p className="path-tree__target">{formatCurrency(revenueTarget)}</p>
         </div>
       </div>
+      <div className="path-tree__narrative">
+        <p className={`path-tree__sentence ${hoveredSentence ? 'is-active' : ''}`}>
+          {hoveredSentence ?? 'Hover over the tree to trace a possible path to the target.'}
+        </p>
+      </div>
       <div className="path-tree__layout">
-        <div className="path-tree__labels">
-          {sorted.map((opportunity) => {
-            const isActive = hoveredId ? Boolean(nodeMap.get(hoveredId)?.resolved[opportunity.id]) : false;
-            return (
-              <div
-                key={opportunity.id}
-                className={`row-label ${isActive ? 'row-label--active' : ''}`}
-                style={{ height: rowHeight }}
-              >
-                <p className="row-label__text">{labelFor(opportunity)}</p>
-                <p className="muted">{opportunity.account}</p>
-              </div>
-            );
-          })}
-        </div>
         <div className="path-tree__canvas">
-          <svg className="path-tree__svg" width="100%" height={height} viewBox={`0 0 ${width} ${height}`} role="img">
+          <svg
+            ref={svgRef}
+            className="path-tree__svg"
+            width="100%"
+            height={height}
+            viewBox={`0 0 ${width} ${height}`}
+            role="img"
+            onPointerMove={handlePointerMove}
+            onPointerLeave={() => setHoveredId(null)}
+          >
             <title>Paths to revenue target decision tree</title>
+            <rect
+              className="path-tree__voronoi"
+              x={MARGIN.left}
+              y={MARGIN.top}
+              width={width - MARGIN.left - MARGIN.right}
+              height={height - MARGIN.top - MARGIN.bottom}
+            />
             <g className="path-tree__gridlines">
               {sorted.map((opportunity, index) => (
                 <line
@@ -217,13 +307,14 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                       className={`path-tree__link ${
                         link.outcome === 'win' ? 'path-tree__link--win' : 'path-tree__link--loss'
                       } ${active ? '' : 'path-tree__link--inactive'} ${isSelected ? 'path-tree__link--selected' : ''}`}
-                      style={{ opacity, strokeWidth }}
+                      style={{
+                        opacity: active ? opacity : 0.08,
+                        strokeWidth: active ? strokeWidth + (hoveredPathIds ? 1.5 : 0) : strokeWidth * 0.6,
+                      }}
                     />
                     <path
                       d={path}
                       className="path-tree__hit"
-                      onMouseEnter={() => setHoveredId(link.target.id)}
-                      onMouseLeave={() => setHoveredId(null)}
                       onClick={() => setSelectedId(link.target.id)}
                       onDoubleClick={() => handleDoubleClick(link.target)}
                     />
@@ -242,6 +333,11 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                     r={4}
                     className={`path-tree__leaf ${node.result === 'success' ? 'path-tree__leaf--success' : ''}`}
                   />
+                ))}
+              {decisionNodes
+                .filter((node) => hoveredPathIds?.has(node.id))
+                .map((node) => (
+                  <circle key={node.id} cx={node.x} cy={node.y} r={5} className="path-tree__node-highlight" />
                 ))}
             </g>
           </svg>

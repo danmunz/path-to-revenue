@@ -275,6 +275,21 @@ main {
   margin-bottom: 1rem;
 }
 
+.path-tree__narrative {
+  margin-bottom: 1rem;
+}
+
+.path-tree__sentence {
+  font-size: 1rem;
+  color: var(--muted);
+  margin: 0;
+  transition: color 0.2s ease;
+}
+
+.path-tree__sentence.is-active {
+  color: #0f172a;
+}
+
 .path-tree__meta {
   text-align: right;
 }
@@ -285,38 +300,12 @@ main {
 }
 
 .path-tree__layout {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  gap: 1rem;
-  align-items: start;
+  display: block;
 }
 
 .path-tree__canvas {
   width: 100%;
-}
-
-.path-tree__labels {
-  display: grid;
-  gap: 0;
-  padding-top: 24px;
-}
-
-.row-label {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  transition: color 0.2s ease, opacity 0.2s ease;
-  opacity: 0.65;
-  line-height: 1.2;
-}
-
-.row-label--active {
-  opacity: 1;
-  color: #0f172a;
-}
-
-.row-label__text {
-  font-weight: 600;
+  min-height: 70vh;
 }
 
 .path-tree__svg {
@@ -324,6 +313,7 @@ main {
   height: auto;
   overflow: visible;
   display: block;
+  min-height: 70vh;
 }
 
 .path-tree__gridlines line {
@@ -362,6 +352,16 @@ main {
   stroke: transparent;
   stroke-width: 16px;
   cursor: pointer;
+}
+
+.path-tree__voronoi {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.path-tree__node-highlight {
+  fill: #1d4ed8;
+  opacity: 0.7;
 }
 
 .path-tree__leaf {
@@ -436,11 +436,16 @@ main {
   }
 
   .path-tree__layout {
-    grid-template-columns: 1fr;
+    display: block;
   }
 
-  .path-tree__labels {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  .control-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .control-row__actions {
+    justify-content: flex-start;
   }
 
   .control-row {
