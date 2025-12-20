@@ -71,6 +71,13 @@ export function buildDecisionTree(
   maxRenderPaths = 20
 ): DecisionTree {
   const sorted = [...opportunities];
+  const suffixMax: number[] = Array.from({ length: sorted.length + 1 }, () => 0);
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    const opportunity = sorted[i];
+    const forcedOutcome = getResolvedOutcome(opportunity, selections);
+    const contributes = forcedOutcome === 'loss' ? 0 : opportunity.tcv;
+    suffixMax[i] = suffixMax[i + 1] + contributes;
+  }
   const root = createNode({
     id: 'root',
     depth: 0,
@@ -96,62 +103,73 @@ export function buildDecisionTree(
   type QueueItem = {
     node: TreeNode;
     index: number;
+    probability: number;
   };
 
-  const queue: QueueItem[] = [{ node: root, index: 0 }];
+  const queue: QueueItem[] = [{ node: root, index: 0, probability: 1 }];
 
   function sortQueue() {
-    queue.sort((a, b) => b.node.probability - a.node.probability);
+    queue.sort((a, b) => b.probability - a.probability);
   }
 
-  function addChild(node: TreeNode, index: number, outcome: Outcome, opportunity: Opportunity) {
-    const revenue = outcome === 'win' ? node.revenue + opportunity.tcv : node.revenue;
-    const probability = node.probability * branchProbability(opportunity, outcome);
+  function addChild(node: TreeNode, index: number, probability: number, opportunity: Opportunity) {
+    const revenue = node.revenue + opportunity.tcv;
+    const nextProbability = probability * branchProbability(opportunity, 'win');
     const child = createNode({
-      id: `${node.id}/${opportunity.id}:${outcome}`,
+      id: `${node.id}/${opportunity.id}:win`,
       depth: index + 1,
       revenue,
-      probability,
+      probability: nextProbability,
       resolved: {
         ...node.resolved,
-        [opportunity.id]: outcome,
+        [opportunity.id]: 'win',
       },
       opportunity,
-      outcome,
+      outcome: 'win',
       parentId: node.id,
     });
     node.children.push(child);
     nodes.push(child);
     nodeMap.set(child.id, child);
-    queue.push({ node: child, index: index + 1 });
+    queue.push({ node: child, index: index + 1, probability: nextProbability });
   }
 
   while (queue.length > 0) {
     sortQueue();
     const current = queue.shift();
     if (!current) break;
-    const { node, index } = current;
+    const { node, index, probability } = current;
+
+    if (node.revenue + suffixMax[index] < revenueTarget) {
+      continue;
+    }
 
     if (node.revenue >= revenueTarget) {
       node.isTerminal = true;
       node.result = 'success';
       terminalNodes.push(node);
     } else if (index >= sorted.length) {
-      node.isTerminal = true;
-      node.result = 'failure';
-      terminalNodes.push(node);
+      continue;
     } else {
       const opportunity = sorted[index];
       const forcedOutcome = getResolvedOutcome(opportunity, selections);
-      const outcomes: Outcome[] = forcedOutcome ? [forcedOutcome] : ['win', 'loss'];
-      outcomes.forEach((outcome) => addChild(node, index, outcome, opportunity));
+      if (forcedOutcome === 'win') {
+        addChild(node, index, probability, opportunity);
+      } else if (forcedOutcome === 'loss') {
+        const nextProbability = probability * branchProbability(opportunity, 'loss');
+        queue.push({ node, index: index + 1, probability: nextProbability });
+      } else {
+        addChild(node, index, probability, opportunity);
+        const nextProbability = probability * branchProbability(opportunity, 'loss');
+        queue.push({ node, index: index + 1, probability: nextProbability });
+      }
     }
 
     if (terminalNodes.length >= maxRenderPaths) {
       const minTerminalProbability = Math.min(...terminalNodes.map((terminal) => terminal.probability));
       sortQueue();
       const next = queue[0];
-      if (!next || next.node.probability <= minTerminalProbability) {
+      if (!next || next.probability <= minTerminalProbability) {
         break;
       }
     }
@@ -185,25 +203,30 @@ export function countPaths(
   const ordered = [...opportunities];
   const totalOpportunities = ordered.length;
   const suffixMax: number[] = Array.from({ length: totalOpportunities + 1 }, () => 0);
+  const suffixCombinations: number[] = Array.from({ length: totalOpportunities + 1 }, () => 1);
+
   for (let i = totalOpportunities - 1; i >= 0; i -= 1) {
-    suffixMax[i] = suffixMax[i + 1] + ordered[i].tcv;
+    const opportunity = ordered[i];
+    const forcedOutcome = getResolvedOutcome(opportunity, selections);
+    const contributes = forcedOutcome === 'loss' ? 0 : opportunity.tcv;
+    suffixMax[i] = suffixMax[i + 1] + contributes;
+    const outcomeCount = forcedOutcome ? 1 : 2;
+    suffixCombinations[i] = suffixCombinations[i + 1] * outcomeCount;
   }
 
   const memo = new Map<string, { success: number; failure: number }>();
 
   function countRemaining(index: number, revenue: number): { success: number; failure: number } {
     if (revenue >= revenueTarget) {
-      const remaining = totalOpportunities - index;
-      return { success: 2 ** remaining, failure: 0 };
+      return { success: suffixCombinations[index], failure: 0 };
     }
 
     if (revenue + suffixMax[index] < revenueTarget) {
-      const remaining = totalOpportunities - index;
-      return { success: 0, failure: 2 ** remaining };
+      return { success: 0, failure: suffixCombinations[index] };
     }
 
     if (index >= totalOpportunities) {
-      return { success: 0, failure: 1 };
+      return { success: 0, failure: suffixCombinations[index] };
     }
 
     const key = `${index}|${revenue}`;
