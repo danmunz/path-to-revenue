@@ -66,15 +66,19 @@ function createNode(params: Partial<TreeNode> & Pick<TreeNode, 'id' | 'depth' | 
 export function buildDecisionTree(
   opportunities: Opportunity[],
   selections: ScenarioSelection,
-  revenueTarget: number
+  revenueTarget: number,
+  startingRevenue = 0,
+  maxRenderPaths = 20
 ): DecisionTree {
-  const sorted = [...opportunities].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  const sorted = [...opportunities];
   const root = createNode({
     id: 'root',
     depth: 0,
-    revenue: sorted
-      .filter((opp) => getResolvedOutcome(opp, selections) === 'win' && opp.closed)
-      .reduce((sum, opp) => sum + opp.tcv, 0),
+    revenue:
+      startingRevenue +
+      sorted
+        .filter((opp) => getResolvedOutcome(opp, selections) === 'win' && opp.closed)
+        .reduce((sum, opp) => sum + opp.tcv, 0),
     probability: 1,
     resolved: sorted.reduce<Record<string, Outcome>>((acc, opp) => {
       const outcome = getResolvedOutcome(opp, selections);
@@ -86,66 +90,134 @@ export function buildDecisionTree(
   });
 
   const nodes: TreeNode[] = [root];
+  const nodeMap = new Map<string, TreeNode>([['root', root]]);
+  const terminalNodes: TreeNode[] = [];
 
-  function expand(node: TreeNode, index: number) {
+  type QueueItem = {
+    node: TreeNode;
+    index: number;
+  };
+
+  const queue: QueueItem[] = [{ node: root, index: 0 }];
+
+  function sortQueue() {
+    queue.sort((a, b) => b.node.probability - a.node.probability);
+  }
+
+  function addChild(node: TreeNode, index: number, outcome: Outcome, opportunity: Opportunity) {
+    const revenue = outcome === 'win' ? node.revenue + opportunity.tcv : node.revenue;
+    const probability = node.probability * branchProbability(opportunity, outcome);
+    const child = createNode({
+      id: `${node.id}/${opportunity.id}:${outcome}`,
+      depth: index + 1,
+      revenue,
+      probability,
+      resolved: {
+        ...node.resolved,
+        [opportunity.id]: outcome,
+      },
+      opportunity,
+      outcome,
+      parentId: node.id,
+    });
+    node.children.push(child);
+    nodes.push(child);
+    nodeMap.set(child.id, child);
+    queue.push({ node: child, index: index + 1 });
+  }
+
+  while (queue.length > 0) {
+    sortQueue();
+    const current = queue.shift();
+    if (!current) break;
+    const { node, index } = current;
+
     if (node.revenue >= revenueTarget) {
       node.isTerminal = true;
       node.result = 'success';
-      return;
-    }
-
-    if (index >= sorted.length) {
+      terminalNodes.push(node);
+    } else if (index >= sorted.length) {
       node.isTerminal = true;
       node.result = 'failure';
-      return;
+      terminalNodes.push(node);
+    } else {
+      const opportunity = sorted[index];
+      const forcedOutcome = getResolvedOutcome(opportunity, selections);
+      const outcomes: Outcome[] = forcedOutcome ? [forcedOutcome] : ['win', 'loss'];
+      outcomes.forEach((outcome) => addChild(node, index, outcome, opportunity));
     }
 
-    const opportunity = sorted[index];
+    if (terminalNodes.length >= maxRenderPaths) {
+      const minTerminalProbability = Math.min(...terminalNodes.map((terminal) => terminal.probability));
+      sortQueue();
+      const next = queue[0];
+      if (!next || next.node.probability <= minTerminalProbability) {
+        break;
+      }
+    }
+  }
+
+  const allowedIds = new Set<string>();
+  terminalNodes.forEach((node) => {
+    let current: TreeNode | undefined = node;
+    while (current) {
+      if (allowedIds.has(current.id)) break;
+      allowedIds.add(current.id);
+      current = current.parentId ? nodeMap.get(current.parentId) : undefined;
+    }
+  });
+  allowedIds.add(root.id);
+
+  const prunedNodes = nodes.filter((node) => allowedIds.has(node.id));
+  prunedNodes.forEach((node) => {
+    node.children = node.children.filter((child) => allowedIds.has(child.id));
+  });
+
+  return { root, nodes: prunedNodes };
+}
+
+export function countPaths(
+  opportunities: Opportunity[],
+  selections: ScenarioSelection,
+  revenueTarget: number,
+  startingRevenue = 0
+): PathCounts {
+  const ordered = [...opportunities];
+  const totalOpportunities = ordered.length;
+  const suffixMax: number[] = Array.from({ length: totalOpportunities + 1 }, () => 0);
+  for (let i = totalOpportunities - 1; i >= 0; i -= 1) {
+    suffixMax[i] = suffixMax[i + 1] + ordered[i].tcv;
+  }
+
+  const memo = new Map<string, { success: number; failure: number }>();
+
+  function countRemaining(index: number, revenue: number): { success: number; failure: number } {
+    if (revenue >= revenueTarget) {
+      const remaining = totalOpportunities - index;
+      return { success: 2 ** remaining, failure: 0 };
+    }
+
+    if (revenue + suffixMax[index] < revenueTarget) {
+      const remaining = totalOpportunities - index;
+      return { success: 0, failure: 2 ** remaining };
+    }
+
+    if (index >= totalOpportunities) {
+      return { success: 0, failure: 1 };
+    }
+
+    const key = `${index}|${revenue}`;
+    const cached = memo.get(key);
+    if (cached) return cached;
+
+    const opportunity = ordered[index];
     const forcedOutcome = getResolvedOutcome(opportunity, selections);
     const outcomes: Outcome[] = forcedOutcome ? [forcedOutcome] : ['win', 'loss'];
 
-    outcomes.forEach((outcome) => {
-      const revenue = outcome === 'win' ? node.revenue + opportunity.tcv : node.revenue;
-      const probability = node.probability * branchProbability(opportunity, outcome);
-      const child = createNode({
-        id: `${node.id}/${opportunity.id}:${outcome}`,
-        depth: index + 1,
-        revenue,
-        probability,
-        resolved: {
-          ...node.resolved,
-          [opportunity.id]: outcome,
-        },
-        opportunity,
-        outcome,
-        parentId: node.id,
-      });
-
-      node.children.push(child);
-      nodes.push(child);
-      expand(child, index + 1);
-    });
-  }
-
-  expand(root, 0);
-
-  return { root, nodes };
-}
-
-export function countPaths(root: TreeNode, totalOpportunities: number): PathCounts {
-  function walk(node: TreeNode): { success: number; failure: number } {
-    if (node.isTerminal || node.children.length === 0) {
-      const remaining = Math.max(totalOpportunities - node.depth, 0);
-      const ways = 2 ** remaining;
-      return {
-        success: node.result === 'success' ? ways : 0,
-        failure: node.result === 'failure' ? ways : 0,
-      };
-    }
-
-    return node.children.reduce(
-      (acc, child) => {
-        const childCounts = walk(child);
+    const result = outcomes.reduce(
+      (acc, outcome) => {
+        const nextRevenue = outcome === 'win' ? revenue + opportunity.tcv : revenue;
+        const childCounts = countRemaining(index + 1, nextRevenue);
         return {
           success: acc.success + childCounts.success,
           failure: acc.failure + childCounts.failure,
@@ -153,9 +225,12 @@ export function countPaths(root: TreeNode, totalOpportunities: number): PathCoun
       },
       { success: 0, failure: 0 }
     );
+
+    memo.set(key, result);
+    return result;
   }
 
-  const { success, failure } = walk(root);
+  const { success, failure } = countRemaining(0, startingRevenue);
   const total = success + failure;
   const percentSuccess = total > 0 ? (success / total) * 100 : 0;
 
