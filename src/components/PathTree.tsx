@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Opportunity } from '../data/types';
-import type { DecisionTree, Outcome, TreeNode } from '../domain/decisionTree';
+import type { DecisionTree, Outcome, PathCounts, TreeNode } from '../domain/decisionTree';
 import { formatCurrency, getClosedOutcome } from '../domain/decisionTree';
 import { useAppState } from '../state/appState';
 
@@ -9,6 +9,8 @@ type PathTreeProps = {
   tree: DecisionTree;
   revenueTarget: number;
   slowMotion: boolean;
+  truncatedCount: number;
+  counts: PathCounts;
 };
 
 type PositionedNode = TreeNode & {
@@ -16,9 +18,10 @@ type PositionedNode = TreeNode & {
   y: number;
 };
 
-const ROW_HEIGHT = 72;
-const COLUMN_WIDTH = 120;
-const MARGIN = { top: 24, right: 120, bottom: 32, left: 220 };
+const ROW_HEIGHT = 84;
+const COLUMN_WIDTH = 80;
+const MARGIN = { top: 24, right: 100, bottom: 32, left: 200 };
+const MAX_TREE_HEIGHT = 520;
 
 function computeLayout(nodes: TreeNode[]): Map<string, { x: number; y: number }> {
   const leaves: TreeNode[] = [];
@@ -70,20 +73,21 @@ function deriveOpacity(opportunity: Opportunity, outcome: Outcome): number {
   return Math.max(0.2, Math.min(base, 0.9));
 }
 
-export function PathTree({ opportunities, tree, revenueTarget, slowMotion }: PathTreeProps) {
+export function PathTree({ opportunities, tree, revenueTarget, slowMotion, truncatedCount, counts }: PathTreeProps) {
   const { setSelection, selections } = useAppState();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const sorted = useMemo(
-    () => [...opportunities].sort((a, b) => a.startDate.getTime() - b.startDate.getTime()),
-    [opportunities]
-  );
+  const sorted = useMemo(() => [...opportunities], [opportunities]);
 
   const layout = useMemo(() => computeLayout(tree.nodes), [tree.nodes]);
   const maxX = Math.max(...Array.from(layout.values()).map((pos) => pos.x), 0);
   const width = MARGIN.left + MARGIN.right + Math.max(maxX, 1) * COLUMN_WIDTH;
-  const height = MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * ROW_HEIGHT;
+  const rowHeight = Math.max(
+    24,
+    Math.min(ROW_HEIGHT, (MAX_TREE_HEIGHT - MARGIN.top - MARGIN.bottom) / Math.max(sorted.length, 1))
+  );
+  const height = MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * rowHeight;
 
   const positionedNodes = useMemo(
     () =>
@@ -92,10 +96,10 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion }: Pat
         return {
           ...node,
           x: MARGIN.left + pos.x * COLUMN_WIDTH,
-          y: MARGIN.top + pos.y * ROW_HEIGHT,
+          y: MARGIN.top + pos.y * rowHeight,
         };
       }),
-    [layout, tree.nodes]
+    [layout, rowHeight, tree.nodes]
   );
 
   const nodeMap = useMemo(() => {
@@ -142,13 +146,27 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion }: Pat
     );
   }
 
+  function labelFor(opportunity: Opportunity): string {
+    const selection = selections[opportunity.id];
+    if (selection === 'win') return `If ${opportunity.name} is won…`;
+    if (selection === 'loss') return `If ${opportunity.name} is lost…`;
+    return `If ${opportunity.name} is won/lost…`;
+  }
+
   return (
     <section className={`path-tree ${slowMotion ? 'path-tree--slow' : ''}`}>
       <div className="path-tree__header">
         <div>
           <p className="eyebrow">Main visualization</p>
           <h2>Paths to target</h2>
-          <p className="muted">Each row is an opportunity; blue ribbons win, red ribbons lose.</p>
+          <p className="muted">
+            There are {counts.success.toLocaleString()} ways to hit {formatCurrency(revenueTarget)}.
+          </p>
+          <p className="muted">Showing the top 20 paths by probability so you can scan outcomes quickly.</p>
+          <p className="muted">Each row is a decision point; blue ribbons win, red ribbons lose.</p>
+          {truncatedCount > 0 && (
+            <p className="muted">Showing the top {opportunities.length} open opportunities ({truncatedCount} hidden).</p>
+          )}
         </div>
         <div className="path-tree__meta">
           <p className="muted">Target</p>
@@ -160,68 +178,74 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion }: Pat
           {sorted.map((opportunity) => {
             const isActive = hoveredId ? Boolean(nodeMap.get(hoveredId)?.resolved[opportunity.id]) : false;
             return (
-              <div key={opportunity.id} className={`row-label ${isActive ? 'row-label--active' : ''}`}>
-                <p className="row-label__text">If {opportunity.name} is won…</p>
+              <div
+                key={opportunity.id}
+                className={`row-label ${isActive ? 'row-label--active' : ''}`}
+                style={{ height: rowHeight }}
+              >
+                <p className="row-label__text">{labelFor(opportunity)}</p>
                 <p className="muted">{opportunity.account}</p>
               </div>
             );
           })}
         </div>
-        <svg className="path-tree__svg" width={width} height={height} role="img">
-          <title>Paths to revenue target decision tree</title>
-          <g className="path-tree__gridlines">
-            {sorted.map((opportunity, index) => (
-              <line
-                key={opportunity.id}
-                x1={MARGIN.left}
-                x2={width - MARGIN.right}
-                y1={MARGIN.top + index * ROW_HEIGHT}
-                y2={MARGIN.top + index * ROW_HEIGHT}
-              />
-            ))}
-          </g>
-          <g className="path-tree__links">
-            {links.map((link) => {
-              const opacity = link.opportunity ? deriveOpacity(link.opportunity, link.outcome) : 0.4;
-              const strokeWidth = 1.5 + (link.probability / maxProbability) * 6;
-              const path = pathForLink(link.source, link.target);
-              const active = isActivePath(link.target.id);
-              const isSelected = selectedId && link.target.id.startsWith(selectedId);
-              return (
-                <g key={link.id}>
-                  <path
-                    d={path}
-                    className={`path-tree__link ${link.outcome === 'win' ? 'path-tree__link--win' : 'path-tree__link--loss'} ${
-                      active ? '' : 'path-tree__link--inactive'
-                    } ${isSelected ? 'path-tree__link--selected' : ''}`}
-                    style={{ opacity, strokeWidth }}
-                  />
-                  <path
-                    d={path}
-                    className="path-tree__hit"
-                    onMouseEnter={() => setHoveredId(link.target.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    onClick={() => setSelectedId(link.target.id)}
-                    onDoubleClick={() => handleDoubleClick(link.target)}
-                  />
-                </g>
-              );
-            })}
-          </g>
-          <g className="path-tree__nodes">
-            {positionedNodes
-              .filter((node) => node.isTerminal)
-              .map((node) => (
-                <circle
-                  key={node.id}
-                  cx={node.x}
-                  cy={node.y}
-                  r={4}
-                  className={`path-tree__leaf ${node.result === 'success' ? 'path-tree__leaf--success' : ''}`}
+        <div className="path-tree__canvas">
+          <svg className="path-tree__svg" width="100%" height={height} viewBox={`0 0 ${width} ${height}`} role="img">
+            <title>Paths to revenue target decision tree</title>
+            <g className="path-tree__gridlines">
+              {sorted.map((opportunity, index) => (
+                <line
+                  key={opportunity.id}
+                  x1={MARGIN.left}
+                  x2={width - MARGIN.right}
+                  y1={MARGIN.top + index * rowHeight}
+                  y2={MARGIN.top + index * rowHeight}
                 />
               ))}
-          </g>
-        </svg>
+            </g>
+            <g className="path-tree__links">
+              {links.map((link) => {
+                const opacity = link.opportunity ? deriveOpacity(link.opportunity, link.outcome) : 0.4;
+                const strokeWidth = 1.5 + (link.probability / maxProbability) * 6;
+                const path = pathForLink(link.source, link.target);
+                const active = isActivePath(link.target.id);
+                const isSelected = selectedId && link.target.id.startsWith(selectedId);
+                return (
+                  <g key={link.id}>
+                    <path
+                      d={path}
+                      className={`path-tree__link ${
+                        link.outcome === 'win' ? 'path-tree__link--win' : 'path-tree__link--loss'
+                      } ${active ? '' : 'path-tree__link--inactive'} ${isSelected ? 'path-tree__link--selected' : ''}`}
+                      style={{ opacity, strokeWidth }}
+                    />
+                    <path
+                      d={path}
+                      className="path-tree__hit"
+                      onMouseEnter={() => setHoveredId(link.target.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      onClick={() => setSelectedId(link.target.id)}
+                      onDoubleClick={() => handleDoubleClick(link.target)}
+                    />
+                  </g>
+                );
+              })}
+            </g>
+            <g className="path-tree__nodes">
+              {positionedNodes
+                .filter((node) => node.isTerminal)
+                .map((node) => (
+                  <circle
+                    key={node.id}
+                    cx={node.x}
+                    cy={node.y}
+                    r={4}
+                    className={`path-tree__leaf ${node.result === 'success' ? 'path-tree__leaf--success' : ''}`}
+                  />
+                ))}
+            </g>
+          </svg>
+        </div>
       </div>
     </section>
   );
