@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Opportunity } from '../data/types';
 import type { DecisionTree, Outcome, PathCounts, TreeNode } from '../domain/decisionTree';
 import { formatCurrency, getClosedOutcome } from '../domain/decisionTree';
@@ -19,10 +19,24 @@ type PositionedNode = TreeNode & {
   y: number;
 };
 
+type HoverLabel = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  name: string;
+  outcome: Outcome;
+  distance: number;
+};
+
 const ROW_HEIGHT = 70;
 const COLUMN_WIDTH = 80;
 const MARGIN = { top: 36, right: 100, bottom: 32, left: 80 };
 const MIN_TREE_HEIGHT = 720;
+const LABEL_WIDTH = 240;
+const LABEL_HEIGHT = 52;
+const LABEL_OFFSET = 18;
 
 function computeLayout(nodes: TreeNode[]): Map<string, { x: number; y: number }> {
   const leaves: TreeNode[] = [];
@@ -79,6 +93,9 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number } | null>(null);
+  const [labelSnapshot, setLabelSnapshot] = useState<HoverLabel[]>([]);
+  const [labelsVisible, setLabelsVisible] = useState(false);
 
   const sorted = useMemo(() => [...opportunities], [opportunities]);
 
@@ -182,6 +199,79 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     return `If ${steps.join(', and ')}`;
   }, [hoveredLeafId, nodeMap]);
 
+  const hoveredPathNodes = useMemo(() => {
+    if (!hoveredLeafId) return null;
+    const ordered: PositionedNode[] = [];
+    let current: PositionedNode | undefined = nodeMap.get(hoveredLeafId);
+    while (current) {
+      ordered.push(current);
+      current = current.parentId ? nodeMap.get(current.parentId) : undefined;
+    }
+    ordered.reverse();
+    return ordered;
+  }, [hoveredLeafId, nodeMap]);
+
+  const hoveredLabels = useMemo(() => {
+    if (!hoveredPathNodes) return null;
+    const labels: HoverLabel[] = [];
+
+    hoveredPathNodes.forEach((node) => {
+      if (!node.parentId || !node.opportunity || !node.outcome) return;
+      const parent = nodeMap.get(node.parentId);
+      if (!parent) return;
+      const midX = (parent.x + node.x) / 2;
+      const midY = (parent.y + node.y) / 2;
+      const dx = node.x - parent.x;
+      const dy = node.y - parent.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const normalX = -dy / len;
+      const normalY = dx / len;
+      const offsetX = normalX * LABEL_OFFSET;
+      const offsetY = normalY * LABEL_OFFSET;
+      const x = midX + offsetX + (normalX < 0 ? -LABEL_WIDTH : 0);
+      const y = midY + offsetY - LABEL_HEIGHT / 2;
+      const distance = hoveredPoint ? Math.hypot(midX - hoveredPoint.x, midY - hoveredPoint.y) : 0;
+
+      labels.push({
+        id: node.id,
+        x,
+        y,
+        width: LABEL_WIDTH,
+        height: LABEL_HEIGHT,
+        name: node.opportunity.name,
+        outcome: node.outcome,
+        distance,
+      });
+    });
+
+    labels.sort((a, b) => a.distance - b.distance);
+
+    const accepted: HoverLabel[] = [];
+    labels.forEach((label) => {
+      const overlaps = accepted.some((other) => {
+        const withinX = label.x < other.x + other.width && label.x + label.width > other.x;
+        const withinY = label.y < other.y + other.height && label.y + label.height > other.y;
+        return withinX && withinY;
+      });
+      if (!overlaps) {
+        accepted.push(label);
+      }
+    });
+
+    return accepted;
+  }, [hoveredPathNodes, hoveredPoint, nodeMap]);
+
+  useEffect(() => {
+    if (hoveredLabels && hoveredLabels.length > 0) {
+      setLabelSnapshot(hoveredLabels);
+      setLabelsVisible(true);
+      return undefined;
+    }
+    setLabelsVisible(false);
+    const timeout = window.setTimeout(() => setLabelSnapshot([]), 220);
+    return () => window.clearTimeout(timeout);
+  }, [hoveredLabels]);
+
   const links = positionedNodes.flatMap((node) =>
     node.children.map((child) => ({
       id: `${node.id}->${child.id}`,
@@ -208,6 +298,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     const index = delaunay.find(x, y);
     const node = decisionNodes[index];
     setHoveredId(node?.id ?? null);
+    setHoveredPoint({ x, y });
   }
 
   function handleDoubleClick(node: TreeNode) {
@@ -228,13 +319,6 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
         <p className="empty">Visualization will appear once opportunities are loaded.</p>
       </section>
     );
-  }
-
-  function labelFor(opportunity: Opportunity): string {
-    const selection = selections[opportunity.id];
-    if (selection === 'win') return `If ${opportunity.name} is won…`;
-    if (selection === 'loss') return `If ${opportunity.name} is lost…`;
-    return `If ${opportunity.name} is won/lost…`;
   }
 
   return (
@@ -272,7 +356,10 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
             viewBox={`0 0 ${width} ${height}`}
             role="img"
             onPointerMove={handlePointerMove}
-            onPointerLeave={() => setHoveredId(null)}
+            onPointerLeave={() => {
+              setHoveredId(null);
+              setHoveredPoint(null);
+            }}
           >
             <title>Paths to revenue target decision tree</title>
             <rect
@@ -339,6 +426,25 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                 .map((node) => (
                   <circle key={node.id} cx={node.x} cy={node.y} r={5} className="path-tree__node-highlight" />
                 ))}
+            </g>
+            <g className={`path-tree__labels ${labelsVisible ? 'is-visible' : ''}`}>
+              {labelSnapshot.map((label) => (
+                <foreignObject
+                  key={label.id}
+                  x={label.x}
+                  y={label.y}
+                  width={label.width}
+                  height={label.height}
+                  className="path-tree__label-object"
+                >
+                  <div className="path-tree__label">
+                    <span className="path-tree__label-name">{label.name}</span>
+                    <span className={`path-tree__label-outcome path-tree__label-outcome--${label.outcome}`}>
+                      {label.outcome === 'win' ? 'Won' : 'Lost'}
+                    </span>
+                  </div>
+                </foreignObject>
+              ))}
             </g>
           </svg>
         </div>
