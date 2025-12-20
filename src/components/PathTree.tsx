@@ -192,8 +192,8 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     ordered.reverse();
     ordered.forEach((node) => {
       if (!node.opportunity || !node.outcome) return;
-      const verb = node.outcome === 'win' ? 'won' : 'lost';
-      steps.push(`${node.opportunity.name} is ${verb}`);
+      if (node.outcome !== 'win') return;
+      steps.push(`${node.opportunity.name} is won`);
     });
     if (!steps.length) return null;
     return `If ${steps.join(', and ')}`;
@@ -330,8 +330,8 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
           <p className="muted">
             There are {counts.success.toLocaleString()} ways to hit {formatCurrency(revenueTarget)}.
           </p>
-          <p className="muted">Showing the top 20 paths by probability so you can scan outcomes quickly.</p>
-          <p className="muted">Each row is a decision point; blue ribbons win, red ribbons lose.</p>
+          <p className="muted">Showing the top 20 winning paths by probability so you can scan quickly.</p>
+          <p className="muted">Each ribbon is a win path that could still reach the target.</p>
           {truncatedCount > 0 && (
             <p className="muted">Showing the top {opportunities.length} open opportunities ({truncatedCount} hidden).</p>
           )}
