@@ -18,9 +18,9 @@ type PositionedNode = TreeNode & {
   y: number;
 };
 
-const ROW_HEIGHT = 72;
-const COLUMN_WIDTH = 120;
-const MARGIN = { top: 24, right: 120, bottom: 32, left: 220 };
+const ROW_HEIGHT = 84;
+const COLUMN_WIDTH = 80;
+const MARGIN = { top: 24, right: 100, bottom: 32, left: 200 };
 const MAX_TREE_HEIGHT = 520;
 
 function computeLayout(nodes: TreeNode[]): Map<string, { x: number; y: number }> {
@@ -84,7 +84,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const maxX = Math.max(...Array.from(layout.values()).map((pos) => pos.x), 0);
   const width = MARGIN.left + MARGIN.right + Math.max(maxX, 1) * COLUMN_WIDTH;
   const rowHeight = Math.max(
-    18,
+    24,
     Math.min(ROW_HEIGHT, (MAX_TREE_HEIGHT - MARGIN.top - MARGIN.bottom) / Math.max(sorted.length, 1))
   );
   const height = MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * rowHeight;
@@ -162,6 +162,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
           <p className="muted">
             There are {counts.success.toLocaleString()} ways to hit {formatCurrency(revenueTarget)}.
           </p>
+          <p className="muted">Showing the top 20 paths by probability so you can scan outcomes quickly.</p>
           <p className="muted">Each row is a decision point; blue ribbons win, red ribbons lose.</p>
           {truncatedCount > 0 && (
             <p className="muted">Showing the top {opportunities.length} open opportunities ({truncatedCount} hidden).</p>

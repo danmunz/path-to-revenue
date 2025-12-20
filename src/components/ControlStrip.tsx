@@ -11,6 +11,7 @@ type ControlStripProps = {
 export function ControlStrip({ opportunities, selections }: ControlStripProps) {
   const { setSelection, resetSelections } = useAppState();
   const hasSelections = Object.keys(selections).length > 0;
+  const maxTcv = Math.max(...opportunities.map((opportunity) => opportunity.tcv), 1);
 
   return (
     <section className="control-strip control-strip--compact">
@@ -26,23 +27,27 @@ export function ControlStrip({ opportunities, selections }: ControlStripProps) {
           </button>
         )}
       </div>
-      <div className="control-strip__grid">
+      <div className="control-strip__list">
         {opportunities.map((opportunity) => {
           const closedOutcome = getClosedOutcome(opportunity);
           const selection = selections[opportunity.id];
           const isLocked = Boolean(closedOutcome);
           const pWinLabel = `${Math.round(opportunity.pWin * 100)}%`;
+          const tcvWidth = `${Math.max(6, (opportunity.tcv / maxTcv) * 100)}%`;
 
           return (
-            <div key={opportunity.id} className={`control-item ${isLocked ? 'control-item--locked' : ''}`}>
-              <div className="control-item__name" title={opportunity.name}>
+            <div key={opportunity.id} className={`control-row ${isLocked ? 'control-row--locked' : ''}`}>
+              <div className="control-row__name" title={opportunity.name}>
                 {opportunity.name}
               </div>
-              <div className="control-item__meta">
-                <span className="control-item__badge">{formatCurrency(opportunity.tcv)}</span>
-                <span className="control-item__badge">{pWinLabel} PWIN</span>
+              <div className="control-row__tcv" aria-label={`TCV ${formatCurrency(opportunity.tcv)}`}>
+                <span className="control-row__tcv-bar" style={{ width: tcvWidth }} />
               </div>
-              <div className="control-item__actions">
+              <div className="control-row__pwin" aria-label={`PWIN ${pWinLabel}`}>
+                <span className="control-row__pwin-dot" style={{ opacity: Math.max(0.3, opportunity.pWin) }} />
+                <span className="control-row__pwin-text">{pWinLabel}</span>
+              </div>
+              <div className="control-row__actions">
                 <button
                   type="button"
                   className={`pill pill--compact ${selection === 'win' ? 'pill--active' : ''}`}
