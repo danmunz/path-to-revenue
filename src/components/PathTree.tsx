@@ -33,8 +33,7 @@ type HoverLabel = {
 const ROW_HEIGHT = 70;
 const COLUMN_WIDTH = 80;
 const MARGIN = { top: 36, right: 100, bottom: 32, left: 80 };
-const MIN_TREE_HEIGHT = 520;
-const MAX_TREE_HEIGHT = 760;
+const MIN_TREE_HEIGHT = 720;
 const LABEL_WIDTH = 240;
 const LABEL_HEIGHT = 52;
 const LABEL_OFFSET = 18;
@@ -103,9 +102,8 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const layout = useMemo(() => computeLayout(tree.nodes), [tree.nodes]);
   const maxX = Math.max(...Array.from(layout.values()).map((pos) => pos.x), 0);
   const width = MARGIN.left + MARGIN.right + Math.max(maxX, 1) * COLUMN_WIDTH;
-  const preferredHeight = MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * ROW_HEIGHT;
-  const height = Math.min(MAX_TREE_HEIGHT, Math.max(MIN_TREE_HEIGHT, preferredHeight));
-  const rowHeight = (height - MARGIN.top - MARGIN.bottom) / Math.max(sorted.length, 1);
+  const rowHeight = ROW_HEIGHT;
+  const height = Math.max(MIN_TREE_HEIGHT, MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * rowHeight);
 
   const positionedNodes = useMemo(
     () =>
@@ -354,8 +352,8 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
             ref={svgRef}
             className="path-tree__svg"
             width="100%"
+            height={height}
             viewBox={`0 0 ${width} ${height}`}
-            preserveAspectRatio="xMinYMin meet"
             role="img"
             onPointerMove={handlePointerMove}
             onPointerLeave={() => {
