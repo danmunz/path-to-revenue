@@ -1,2 +1,31 @@
 Account Name,Opportunity Name,Ad Hoc TCV,PWIN,Project Start Date,Top Priority,Portfolio Priority,2026 Factored Revenue,Q1 2026 Revenue,Q2 2026 Revenue,Q3 2026 Revenue,Q4 2026 Revenue,BD/Capture Lead,BAP Stage,Closed,Period of Performance (months)
-USDA,Digital Services Modernization,4200000,65,2026-01-15,TRUE,TRUE,4200000,800000,1100000,1200000,1100000,Alex Rivera,Propose,FALSE,12
+Department of Energy,Nuclear Security Cloud Modernization,15000000,0.2,3/15/2026,1,1,2250000,0,750000,750000,750000,Jordan Lee,Stage 2: Qualify,0,60
+Department of Education,Federal Student Aid Data Migration,8500000,0.5,1/10/2026,0,1,4250000,1062500,1062500,1062500,1062500,Alex Rivera,Stage 3: Capture,0,24
+Department of Veterans Affairs,Telehealth UX/UI Redesign,3000000,0.1,6/1/2026,0,0,150000,0,0,75000,75000,Casey Smith,Stage 1: Identify,0,12
+Environmental Protection Agency,Water Quality Monitoring API,1200000,0.75,2/1/2026,1,0,800000,200000,200000,200000,200000,Morgan Davis,Stage 4: Propose,0,36
+Department of Transportation,Highway Safety AI Analytics,25000000,0.05,10/1/2026,0,0,312500,0,0,0,312500,Jordan Lee,Stage 1: Identify,0,60
+Department of Defense,Cybersecurity Compliance Audit Support,500000,1,12/15/2025,0,1,500000,125000,125000,125000,125000,Alex Rivera,Closed Won,1,6
+Department of Labor,Workforce Development Portal (Sub to TechCorp),4500000,0.3,4/1/2026,0,0,1012500,0,337500,337500,337500,Casey Smith,Stage 2: Qualify,0,48
+Department of Health and Human Services,CDC Disease Tracking Dashboard,18000000,0.1,9/15/2026,1,1,450000,0,0,0,450000,Morgan Davis,Stage 2: Qualify,0,60
+General Services Administration,GSA Schedules Digital Transformation,1,0.1,5/15/2026,0,0,0.03,0,0.01,0.01,0.01,Jordan Lee,Stage 1: Identify,0,12
+Department of Justice,FBI Case Management System O&M,10000000,0.4,1/5/2026,1,1,4000000,1000000,1000000,1000000,1000000,Alex Rivera,Stage 3: Capture,0,36
+Department of Agriculture,Forest Service Drone Mapping (Sub to AeroData),2200000,0.15,7/1/2026,0,0,165000,0,0,82500,82500,Casey Smith,Stage 5: Awaiting Award,0,24
+Department of Commerce,Census Bureau Data Lake Initiative,6000000,0.6,3/1/2026,0,1,2700000,0,900000,900000,900000,Morgan Davis,Stage 4: Propose,0,48
+Department of Housing and Urban Development,HUD Housing Assistance Portal,9000000,0.1,11/1/2026,0,0,225000,0,0,0,225000,Jordan Lee,Stage 1: Identify,0,60
+Department of State,Consular Affairs Biometric Entry System,1,0.05,8/1/2026,0,0,0.01,0,0,0.005,0.005,Alex Rivera,Stage 1: Identify,0,12
+Department of the Interior,National Parks Reservation App Refactor,350000,1,1/1/2026,0,1,350000,87500,87500,87500,87500,Casey Smith,Closed Won,1,12
+Small Business Administration,SBA Loan Processing Automation,5500000,0.25,2/28/2026,1,0,1031250,0,343750,343750,343750,Morgan Davis,Stage 2: Qualify,0,36
+Department of Energy,Renewable Energy Research Grant Platform,12000000,0.1,10/15/2026,0,0,300000,0,0,0,300000,Jordan Lee,Stage 1: Identify,0,60
+National Science Foundation,Grant Management API Services,1,0.2,6/15/2026,0,0,0.05,0,0,0.025,0.025,Alex Rivera,Closed Lost,1,24
+Department of Homeland Security,Border Security Sensor Integration,28000000,0.05,12/1/2026,1,1,350000,0,0,0,350000,Casey Smith,Stage 1: Identify,0,60
+Department of Treasury,IRS Taxpayer UX Research,750000,1,5/1/2026,0,1,500000,0,166666.67,166666.67,166666.66,Morgan Davis,Closed Won,1,9
+Department of Transportation,FAA Air Traffic Control Training Sim,4000000,0.1,9/1/2026,0,0,100000,0,0,50000,50000,Jordan Lee,Stage 2: Qualify,0,48
+Social Security Administration,Disability Claims AI Pilot,150000,1,1/15/2026,0,0,150000,37500,37500,37500,37500,Alex Rivera,Closed Won,1,6
+Department of Education,Teacher Loan Forgiveness Portal (Sub to EdTech),1,0.1,7/20/2026,0,0,0.02,0,0,0.01,0.01,Casey Smith,Stage 5: Awaiting Award,0,12
+Department of Veterans Affairs,Electronic Health Record Modernization Support,50000000,0.01,4/15/2026,1,1,125000,0,41666.67,41666.67,41666.66,Morgan Davis,Stage 1: Identify,0,120
+NASA,Mars Sample Return Mission Logistics IT,10000000,0.8,3/30/2026,1,1,6000000,0,2000000,2000000,2000000,Jordan Lee,Stage 4: Propose,0,60
+Department of Commerce,NOAA Weather Satellite Data Feeds,2000000,0.1,11/15/2026,0,0,50000,0,0,0,50000,Alex Rivera,Closed No Bid,1,24
+Department of Justice,Bureau of Prisons Inmate Management System,1,0.05,2/10/2026,0,0,0.01,0.002,0.002,0.002,0.002,Casey Smith,Closed Canceled,1,60
+Department of Energy,Grid Resilience Data Modeling,3200000,0.3,5/5/2026,0,1,720000,0,240000,240000,240000,Morgan Davis,Stage 3: Capture,0,36
+Department of State,Embassy Security System Upgrade,8000000,0.5,8/10/2026,1,0,1666666.67,0,0,833333.33,833333.34,Jordan Lee,Stage 2: Qualify,0,48
+General Services Administration,Login.gov Integration Services,1500000,0.9,1/20/2026,1,1,1350000,337500,337500,337500,337500,Alex Rivera,Stage 5: Awaiting Award,0,12
