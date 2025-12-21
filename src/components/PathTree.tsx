@@ -30,9 +30,10 @@ type HoverLabel = {
   distance: number;
 };
 
-const COLUMN_WIDTH = 88;
+const ROW_HEIGHT = 70;
+const COLUMN_WIDTH = 80;
 const MARGIN = { top: 36, right: 100, bottom: 32, left: 80 };
-const MIN_TREE_HEIGHT = 360;
+const MIN_TREE_HEIGHT = 720;
 const LABEL_WIDTH = 240;
 const LABEL_HEIGHT = 52;
 const LABEL_OFFSET = 18;
@@ -54,7 +55,7 @@ function computeLayout(nodes: TreeNode[]): Map<string, { x: number; y: number }>
 
   const positions = new Map<string, { x: number; y: number }>();
   leaves.forEach((leaf, index) => {
-    positions.set(leaf.id, { x: leaf.depth, y: index });
+    positions.set(leaf.id, { x: index, y: leaf.depth });
   });
 
   function assignInternal(node: TreeNode) {
@@ -63,9 +64,9 @@ function computeLayout(nodes: TreeNode[]): Map<string, { x: number; y: number }>
     const childPositions = node.children
       .map((child) => positions.get(child.id))
       .filter((value): value is { x: number; y: number } => Boolean(value));
-    const avgY =
-      childPositions.reduce((sum, pos) => sum + pos.y, 0) / Math.max(childPositions.length, 1);
-    positions.set(node.id, { x: node.depth, y: avgY });
+    const avgX =
+      childPositions.reduce((sum, pos) => sum + pos.x, 0) / Math.max(childPositions.length, 1);
+    positions.set(node.id, { x: avgX, y: node.depth });
   }
 
   assignInternal(nodes[0]);
@@ -95,30 +96,26 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number } | null>(null);
   const [labelSnapshot, setLabelSnapshot] = useState<HoverLabel[]>([]);
   const [labelsVisible, setLabelsVisible] = useState(false);
-  const [treeHeight, setTreeHeight] = useState<number>(MIN_TREE_HEIGHT);
 
   const sorted = useMemo(() => [...opportunities], [opportunities]);
 
   const layout = useMemo(() => computeLayout(tree.nodes), [tree.nodes]);
-  const maxDepth = Math.max(...tree.nodes.map((node) => node.depth), 1);
-  const width = MARGIN.left + MARGIN.right + maxDepth * COLUMN_WIDTH;
-  const maxRow = Math.max(...Array.from(layout.values()).map((pos) => pos.y), 0);
-  const verticalSpan = Math.max(1, treeHeight - MARGIN.top - MARGIN.bottom);
-  const rowHeight = maxRow > 0 ? verticalSpan / maxRow : 0;
-  const rowOffset = maxRow === 0 ? verticalSpan / 2 : 0;
-  const height = treeHeight;
+  const maxX = Math.max(...Array.from(layout.values()).map((pos) => pos.x), 0);
+  const width = MARGIN.left + MARGIN.right + Math.max(maxX, 1) * COLUMN_WIDTH;
+  const rowHeight = ROW_HEIGHT;
+  const height = Math.max(MIN_TREE_HEIGHT, MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * rowHeight);
 
   const positionedNodes = useMemo(
     () =>
       tree.nodes.map((node) => {
-        const pos = layout.get(node.id) ?? { x: node.depth, y: 0 };
+        const pos = layout.get(node.id) ?? { x: 0, y: 0 };
         return {
           ...node,
-          x: MARGIN.left + node.depth * COLUMN_WIDTH,
-          y: MARGIN.top + rowOffset + pos.y * rowHeight,
+          x: MARGIN.left + pos.x * COLUMN_WIDTH,
+          y: MARGIN.top + pos.y * rowHeight,
         };
       }),
-    [layout, rowHeight, rowOffset, tree.nodes]
+    [layout, rowHeight, tree.nodes]
   );
 
   const nodeMap = useMemo(() => {
@@ -185,7 +182,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
 
   const hoveredSentence = useMemo(() => {
     if (!hoveredLeafId) return null;
-    const steps: { text: string; outcome: Outcome }[] = [];
+    const steps: string[] = [];
     let current: TreeNode | undefined = nodeMap.get(hoveredLeafId);
     const ordered: TreeNode[] = [];
     while (current) {
@@ -195,28 +192,11 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     ordered.reverse();
     ordered.forEach((node) => {
       if (!node.opportunity || !node.outcome) return;
-      steps.push({
-        text: `${node.opportunity.name} is ${node.outcome === 'win' ? 'won' : 'lost'}`,
-        outcome: node.outcome,
-      });
+      if (node.outcome !== 'win') return;
+      steps.push(`${node.opportunity.name} is won`);
     });
     if (!steps.length) return null;
-    if (steps.length === 1) {
-      return `If ${steps[0].text}`;
-    }
-    let sentence = `If ${steps[0].text}`;
-    let usedContrast = false;
-    steps.slice(1).forEach((step, index, remaining) => {
-      const isFinal = index === remaining.length - 1;
-      const useContrast = step.outcome === 'loss' && !usedContrast;
-      const connector = useContrast ? 'but' : 'and';
-      const separator = isFinal ? '' : ',';
-      sentence = `${sentence}${separator} ${connector} ${step.text}`;
-      if (useContrast) {
-        usedContrast = true;
-      }
-    });
-    return sentence;
+    return `If ${steps.join(', and ')}`;
   }, [hoveredLeafId, nodeMap]);
 
   const hoveredPathNodes = useMemo(() => {
@@ -292,19 +272,6 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     return () => window.clearTimeout(timeout);
   }, [hoveredLabels]);
 
-  useEffect(() => {
-    function updateHeight() {
-      const header = document.querySelector<HTMLElement>('.top-bar');
-      const headerHeight = header?.offsetHeight ?? 0;
-      const nextHeight = Math.max(MIN_TREE_HEIGHT, window.innerHeight - headerHeight);
-      setTreeHeight(nextHeight);
-    }
-
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, []);
-
   const links = positionedNodes.flatMap((node) =>
     node.children.map((child) => ({
       id: `${node.id}->${child.id}`,
@@ -317,8 +284,6 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   );
 
   const maxProbability = Math.max(...links.map((link) => link.probability), 0.01);
-  const minStroke = 1.5;
-  const maxStroke = 6;
 
   function isActivePath(nodeId: string): boolean {
     if (!hoveredPathIds) return true;
@@ -382,14 +347,13 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
         </p>
       </div>
       <div className="path-tree__layout">
-        <div className="path-tree__canvas" style={{ height }}>
+        <div className="path-tree__canvas">
           <svg
             ref={svgRef}
             className="path-tree__svg"
             width="100%"
             height={height}
             viewBox={`0 0 ${width} ${height}`}
-            preserveAspectRatio="xMinYMin meet"
             role="img"
             onPointerMove={handlePointerMove}
             onPointerLeave={() => {
@@ -406,23 +370,20 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
               height={height - MARGIN.top - MARGIN.bottom}
             />
             <g className="path-tree__gridlines">
-              {Array.from({ length: Math.max(2, Math.round(maxRow) + 1) }).map((_, index) => (
+              {sorted.map((opportunity, index) => (
                 <line
-                  key={`gridline-${index}`}
+                  key={opportunity.id}
                   x1={MARGIN.left}
                   x2={width - MARGIN.right}
-                  y1={MARGIN.top + rowOffset + index * rowHeight}
-                  y2={MARGIN.top + rowOffset + index * rowHeight}
+                  y1={MARGIN.top + index * rowHeight}
+                  y2={MARGIN.top + index * rowHeight}
                 />
               ))}
             </g>
             <g className="path-tree__links">
               {links.map((link) => {
-                const probabilityRatio = Math.max(0, link.probability / maxProbability);
-                const probabilityScale = Math.sqrt(probabilityRatio);
-                const baseOpacity = link.opportunity ? deriveOpacity(link.opportunity, link.outcome) : 0.4;
-                const opacity = Math.min(0.95, baseOpacity * (0.35 + probabilityScale * 0.65));
-                const strokeWidth = minStroke + probabilityScale * (maxStroke - minStroke);
+                const opacity = link.opportunity ? deriveOpacity(link.opportunity, link.outcome) : 0.4;
+                const strokeWidth = 1.5 + (link.probability / maxProbability) * 6;
                 const path = pathForLink(link.source, link.target);
                 const active = isActivePath(link.target.id);
                 const isSelected = selectedId && link.target.id.startsWith(selectedId);
