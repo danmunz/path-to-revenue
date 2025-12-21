@@ -305,15 +305,15 @@ main {
 
 .path-tree__canvas {
   width: 100%;
-  height: clamp(420px, 65vh, 720px);
-  max-height: 75vh;
+  min-height: 70vh;
 }
 
 .path-tree__svg {
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  height: auto;
+  overflow: visible;
   display: block;
+  min-height: 70vh;
 }
 
 .path-tree__gridlines line {
