@@ -30,10 +30,9 @@ type HoverLabel = {
   distance: number;
 };
 
-const ROW_HEIGHT = 70;
 const COLUMN_WIDTH = 80;
 const MARGIN = { top: 36, right: 100, bottom: 32, left: 80 };
-const MIN_TREE_HEIGHT = 720;
+const MIN_TREE_HEIGHT = 360;
 const LABEL_WIDTH = 240;
 const LABEL_HEIGHT = 52;
 const LABEL_OFFSET = 18;
@@ -91,19 +90,25 @@ function deriveOpacity(opportunity: Opportunity, outcome: Outcome): number {
 export function PathTree({ opportunities, tree, revenueTarget, slowMotion, truncatedCount, counts }: PathTreeProps) {
   const { setSelection, selections } = useAppState();
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number } | null>(null);
   const [labelSnapshot, setLabelSnapshot] = useState<HoverLabel[]>([]);
   const [labelsVisible, setLabelsVisible] = useState(false);
+  const [treeHeight, setTreeHeight] = useState<number>(MIN_TREE_HEIGHT);
+  const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
   const sorted = useMemo(() => [...opportunities], [opportunities]);
 
   const layout = useMemo(() => computeLayout(tree.nodes), [tree.nodes]);
   const maxX = Math.max(...Array.from(layout.values()).map((pos) => pos.x), 0);
-  const width = MARGIN.left + MARGIN.right + Math.max(maxX, 1) * COLUMN_WIDTH;
-  const rowHeight = ROW_HEIGHT;
-  const height = Math.max(MIN_TREE_HEIGHT, MARGIN.top + MARGIN.bottom + Math.max(sorted.length, 1) * rowHeight);
+  const width = MARGIN.left + MARGIN.right + Math.max(maxX + 1, 1) * COLUMN_WIDTH;
+  const maxDepth = Math.max(...tree.nodes.map((node) => node.depth), 0);
+  const verticalSpan = Math.max(1, treeHeight - MARGIN.top - MARGIN.bottom);
+  const rowHeight = verticalSpan / Math.max(maxDepth, 1);
+  const rowOffset = maxDepth === 0 ? verticalSpan / 2 : 0;
+  const height = treeHeight;
 
   const positionedNodes = useMemo(
     () =>
@@ -112,10 +117,10 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
         return {
           ...node,
           x: MARGIN.left + pos.x * COLUMN_WIDTH,
-          y: MARGIN.top + pos.y * rowHeight,
+          y: MARGIN.top + rowOffset + node.depth * rowHeight,
         };
       }),
-    [layout, rowHeight, tree.nodes]
+    [layout, rowHeight, rowOffset, tree.nodes]
   );
 
   const nodeMap = useMemo(() => {
@@ -182,7 +187,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
 
   const hoveredSentence = useMemo(() => {
     if (!hoveredLeafId) return null;
-    const steps: string[] = [];
+    const steps: { text: string; outcome: Outcome }[] = [];
     let current: TreeNode | undefined = nodeMap.get(hoveredLeafId);
     const ordered: TreeNode[] = [];
     while (current) {
@@ -192,11 +197,28 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     ordered.reverse();
     ordered.forEach((node) => {
       if (!node.opportunity || !node.outcome) return;
-      if (node.outcome !== 'win') return;
-      steps.push(`${node.opportunity.name} is won`);
+      steps.push({
+        text: `${node.opportunity.name} is ${node.outcome === 'win' ? 'won' : 'lost'}`,
+        outcome: node.outcome,
+      });
     });
     if (!steps.length) return null;
-    return `If ${steps.join(', and ')}`;
+    if (steps.length === 1) {
+      return `If ${steps[0].text}`;
+    }
+    let sentence = `If ${steps[0].text}`;
+    let usedContrast = false;
+    steps.slice(1).forEach((step, index, remaining) => {
+      const isFinal = index === remaining.length - 1;
+      const useContrast = step.outcome === 'loss' && !usedContrast;
+      const connector = useContrast ? 'but' : 'and';
+      const separator = isFinal ? '' : ',';
+      sentence = `${sentence}${separator} ${connector} ${step.text}`;
+      if (useContrast) {
+        usedContrast = true;
+      }
+    });
+    return sentence;
   }, [hoveredLeafId, nodeMap]);
 
   const hoveredPathNodes = useMemo(() => {
@@ -268,9 +290,33 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
       return undefined;
     }
     setLabelsVisible(false);
-    const timeout = window.setTimeout(() => setLabelSnapshot([]), 220);
-    return () => window.clearTimeout(timeout);
+    setLabelSnapshot([]);
+    return undefined;
   }, [hoveredLabels]);
+
+  useEffect(() => {
+    if (!canvasRef.current) return undefined;
+    const element = canvasRef.current;
+    const observer = new ResizeObserver(() => {
+      const rect = element.getBoundingClientRect();
+      setCanvasSize({ width: rect.width, height: rect.height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    function updateHeight() {
+      const header = document.querySelector<HTMLElement>('.top-bar');
+      const headerHeight = header?.offsetHeight ?? 0;
+      const nextHeight = Math.max(MIN_TREE_HEIGHT, window.innerHeight - headerHeight);
+      setTreeHeight(nextHeight);
+    }
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
 
   const links = positionedNodes.flatMap((node) =>
     node.children.map((child) => ({
@@ -284,10 +330,17 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   );
 
   const maxProbability = Math.max(...links.map((link) => link.probability), 0.01);
+  const minStroke = 1.5;
+  const maxStroke = 6;
 
   function isActivePath(nodeId: string): boolean {
     if (!hoveredPathIds) return true;
     return hoveredPathIds.has(nodeId);
+  }
+
+  function clearHoverState() {
+    setHoveredId(null);
+    setHoveredPoint(null);
   }
 
   function handlePointerMove(event: React.PointerEvent<SVGSVGElement>) {
@@ -295,6 +348,15 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     const rect = svgRef.current.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * width;
     const y = ((event.clientY - rect.top) / rect.height) * height;
+    if (
+      x < MARGIN.left ||
+      x > width - MARGIN.right ||
+      y < MARGIN.top ||
+      y > height - MARGIN.bottom
+    ) {
+      clearHoverState();
+      return;
+    }
     const index = delaunay.find(x, y);
     const node = decisionNodes[index];
     setHoveredId(node?.id ?? null);
@@ -347,19 +409,20 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
         </p>
       </div>
       <div className="path-tree__layout">
-        <div className="path-tree__canvas">
+        <div className="path-tree__canvas" style={{ height }} ref={canvasRef}>
           <svg
             ref={svgRef}
             className="path-tree__svg"
             width="100%"
             height={height}
             viewBox={`0 0 ${width} ${height}`}
+            preserveAspectRatio="xMinYMin meet"
             role="img"
             onPointerMove={handlePointerMove}
             onPointerLeave={() => {
-              setHoveredId(null);
-              setHoveredPoint(null);
+              clearHoverState();
             }}
+            onPointerOut={clearHoverState}
           >
             <title>Paths to revenue target decision tree</title>
             <rect
@@ -370,20 +433,23 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
               height={height - MARGIN.top - MARGIN.bottom}
             />
             <g className="path-tree__gridlines">
-              {sorted.map((opportunity, index) => (
+              {Array.from({ length: Math.max(2, maxDepth + 1) }).map((_, index) => (
                 <line
-                  key={opportunity.id}
+                  key={`gridline-${index}`}
                   x1={MARGIN.left}
                   x2={width - MARGIN.right}
-                  y1={MARGIN.top + index * rowHeight}
-                  y2={MARGIN.top + index * rowHeight}
+                  y1={MARGIN.top + rowOffset + index * rowHeight}
+                  y2={MARGIN.top + rowOffset + index * rowHeight}
                 />
               ))}
             </g>
             <g className="path-tree__links">
               {links.map((link) => {
-                const opacity = link.opportunity ? deriveOpacity(link.opportunity, link.outcome) : 0.4;
-                const strokeWidth = 1.5 + (link.probability / maxProbability) * 6;
+                const probabilityRatio = Math.max(0, link.probability / maxProbability);
+                const probabilityScale = Math.sqrt(probabilityRatio);
+                const baseOpacity = link.opportunity ? deriveOpacity(link.opportunity, link.outcome) : 0.4;
+                const opacity = Math.min(0.95, baseOpacity * (0.35 + probabilityScale * 0.65));
+                const strokeWidth = minStroke + probabilityScale * (maxStroke - minStroke);
                 const path = pathForLink(link.source, link.target);
                 const active = isActivePath(link.target.id);
                 const isSelected = selectedId && link.target.id.startsWith(selectedId);
@@ -427,26 +493,32 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                   <circle key={node.id} cx={node.x} cy={node.y} r={5} className="path-tree__node-highlight" />
                 ))}
             </g>
-            <g className={`path-tree__labels ${labelsVisible ? 'is-visible' : ''}`}>
-              {labelSnapshot.map((label) => (
-                <foreignObject
-                  key={label.id}
-                  x={label.x}
-                  y={label.y}
-                  width={label.width}
-                  height={label.height}
-                  className="path-tree__label-object"
-                >
-                  <div className="path-tree__label">
-                    <span className="path-tree__label-name">{label.name}</span>
-                    <span className={`path-tree__label-outcome path-tree__label-outcome--${label.outcome}`}>
-                      {label.outcome === 'win' ? 'Won' : 'Lost'}
-                    </span>
-                  </div>
-                </foreignObject>
-              ))}
-            </g>
           </svg>
+          <div className={`path-tree__labels ${labelsVisible ? 'is-visible' : ''}`}>
+            {labelSnapshot.map((label) => {
+              const scaleX = canvasSize.width ? canvasSize.width / width : 1;
+              const scaleY = canvasSize.height ? canvasSize.height / height : 1;
+              const left = label.x * scaleX;
+              const top = label.y * scaleY;
+              return (
+                <div
+                  key={label.id}
+                  className="path-tree__label"
+                  style={{
+                    left,
+                    top,
+                    width: label.width * scaleX,
+                    height: label.height * scaleY,
+                  }}
+                >
+                  <span className="path-tree__label-name">{label.name}</span>
+                  <span className={`path-tree__label-outcome path-tree__label-outcome--${label.outcome}`}>
+                    {label.outcome === 'win' ? 'Won' : 'Lost'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

@@ -305,15 +305,15 @@ main {
 
 .path-tree__canvas {
   width: 100%;
-  min-height: 70vh;
+  height: 100%;
+  position: relative;
 }
 
 .path-tree__svg {
   width: 100%;
-  height: auto;
-  overflow: visible;
+  height: 100%;
+  overflow: hidden;
   display: block;
-  min-height: 70vh;
 }
 
 .path-tree__gridlines line {
@@ -324,7 +324,6 @@ main {
 .path-tree__link {
   fill: none;
   stroke-linecap: round;
-  transition: opacity 0.4s ease, stroke-width 0.4s ease;
 }
 
 .path-tree--slow .path-tree__link {
@@ -375,18 +374,18 @@ main {
 .path-tree__labels {
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  position: absolute;
+  inset: 0;
+  overflow: visible;
 }
 
 .path-tree__labels.is-visible {
   opacity: 1;
 }
 
-.path-tree__label-object {
-  overflow: visible;
-}
-
 .path-tree__label {
+  position: absolute;
+  max-width: 240px;
   width: 100%;
   height: 100%;
   padding: 0.45rem 0.6rem;
@@ -402,7 +401,7 @@ main {
 }
 
 .path-tree__label-name {
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
   display: -webkit-box;
@@ -412,7 +411,7 @@ main {
 }
 
 .path-tree__label-outcome {
-  font-size: 0.62rem;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
