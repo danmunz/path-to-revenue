@@ -63,26 +63,14 @@ function createNode(params: Partial<TreeNode> & Pick<TreeNode, 'id' | 'depth' | 
   };
 }
 
-type PathStep = {
-  opportunity: Opportunity;
-  outcome: Outcome;
-};
-
-type WinningPath = {
-  steps: PathStep[];
-  probability: number;
-  revenue: number;
-};
-
-const MAX_RENDER_PATHS = 20;
-
 export function buildDecisionTree(
   opportunities: Opportunity[],
   selections: ScenarioSelection,
   revenueTarget: number,
-  startingRevenue = 0
+  startingRevenue = 0,
+  maxRenderPaths = 20
 ): DecisionTree {
-  const sorted = opportunities.filter((opportunity) => getResolvedOutcome(opportunity, selections) !== 'loss');
+  const sorted = [...opportunities];
   const suffixMax: number[] = Array.from({ length: sorted.length + 1 }, () => 0);
   for (let i = sorted.length - 1; i >= 0; i -= 1) {
     const opportunity = sorted[i];
@@ -110,53 +98,75 @@ export function buildDecisionTree(
 
   const nodes: TreeNode[] = [root];
   const nodeMap = new Map<string, TreeNode>([['root', root]]);
+  const terminalNodes: TreeNode[] = [];
 
   type QueueItem = {
+    node: TreeNode;
     index: number;
     probability: number;
-    revenue: number;
-    steps: PathStep[];
   };
 
-  const queue: QueueItem[] = [{ index: 0, probability: 1, revenue: root.revenue, steps: [] }];
-  const winningPaths: WinningPath[] = [];
+  const queue: QueueItem[] = [{ node: root, index: 0, probability: 1 }];
 
   function sortQueue() {
     queue.sort((a, b) => b.probability - a.probability);
+  }
+
+  function addChild(node: TreeNode, index: number, probability: number, opportunity: Opportunity) {
+    const revenue = node.revenue + opportunity.tcv;
+    const nextProbability = probability * branchProbability(opportunity, 'win');
+    const child = createNode({
+      id: `${node.id}/${opportunity.id}:win`,
+      depth: index + 1,
+      revenue,
+      probability: nextProbability,
+      resolved: {
+        ...node.resolved,
+        [opportunity.id]: 'win',
+      },
+      opportunity,
+      outcome: 'win',
+      parentId: node.id,
+    });
+    node.children.push(child);
+    nodes.push(child);
+    nodeMap.set(child.id, child);
+    queue.push({ node: child, index: index + 1, probability: nextProbability });
   }
 
   while (queue.length > 0) {
     sortQueue();
     const current = queue.shift();
     if (!current) break;
-    const { index, probability, revenue, steps } = current;
+    const { node, index, probability } = current;
 
-    if (revenue + suffixMax[index] < revenueTarget) {
+    if (node.revenue + suffixMax[index] < revenueTarget) {
       continue;
     }
 
-    if (revenue >= revenueTarget) {
-      winningPaths.push({ steps, probability, revenue });
+    if (node.revenue >= revenueTarget) {
+      node.isTerminal = true;
+      node.result = 'success';
+      terminalNodes.push(node);
     } else if (index >= sorted.length) {
       continue;
     } else {
       const opportunity = sorted[index];
       const forcedOutcome = getResolvedOutcome(opportunity, selections);
-      const outcomes: Outcome[] = forcedOutcome ? [forcedOutcome] : ['win', 'loss'];
-      outcomes.forEach((outcome) => {
-        const nextProbability = probability * branchProbability(opportunity, outcome);
-        const nextRevenue = outcome === 'win' ? revenue + opportunity.tcv : revenue;
-        queue.push({
-          index: index + 1,
-          probability: nextProbability,
-          revenue: nextRevenue,
-          steps: [...steps, { opportunity, outcome }],
-        });
-      });
+      if (forcedOutcome === 'win') {
+        addChild(node, index, probability, opportunity);
+      } else if (forcedOutcome === 'loss') {
+        const nextProbability = probability * branchProbability(opportunity, 'loss');
+        queue.push({ node, index: index + 1, probability: nextProbability });
+      } else {
+        addChild(node, index, probability, opportunity);
+        const nextProbability = probability * branchProbability(opportunity, 'loss');
+        queue.push({ node, index: index + 1, probability: nextProbability });
+      }
     }
 
-    if (winningPaths.length >= MAX_RENDER_PATHS) {
-      const minTerminalProbability = Math.min(...winningPaths.map((terminal) => terminal.probability));
+    if (terminalNodes.length >= maxRenderPaths) {
+      const minTerminalProbability = Math.min(...terminalNodes.map((terminal) => terminal.probability));
       sortQueue();
       const next = queue[0];
       if (!next || next.probability <= minTerminalProbability) {
@@ -165,51 +175,23 @@ export function buildDecisionTree(
     }
   }
 
-  const topWinningPaths = winningPaths
-    .sort((a, b) => b.probability - a.probability)
-    .slice(0, MAX_RENDER_PATHS);
+  const allowedIds = new Set<string>();
+  terminalNodes.forEach((node) => {
+    let current: TreeNode | undefined = node;
+    while (current) {
+      if (allowedIds.has(current.id)) break;
+      allowedIds.add(current.id);
+      current = current.parentId ? nodeMap.get(current.parentId) : undefined;
+    }
+  });
+  allowedIds.add(root.id);
 
-  if (topWinningPaths.length === 0 && root.revenue >= revenueTarget) {
-    root.isTerminal = true;
-    root.result = 'success';
-  }
-
-  topWinningPaths.forEach((path) => {
-    let current = root;
-    let cumulativeProbability = 1;
-    let cumulativeRevenue = root.revenue;
-    let resolved = { ...root.resolved };
-    path.steps.forEach((step, stepIndex) => {
-      cumulativeProbability *= branchProbability(step.opportunity, step.outcome);
-      cumulativeRevenue =
-        step.outcome === 'win' ? cumulativeRevenue + step.opportunity.tcv : cumulativeRevenue;
-      resolved = { ...resolved, [step.opportunity.id]: step.outcome };
-      const id = `${current.id}/${step.opportunity.id}:${step.outcome}`;
-      let child = nodeMap.get(id);
-      if (!child) {
-        child = createNode({
-          id,
-          depth: stepIndex + 1,
-          revenue: cumulativeRevenue,
-          probability: cumulativeProbability,
-          resolved,
-          opportunity: step.opportunity,
-          outcome: step.outcome,
-          parentId: current.id,
-        });
-        nodeMap.set(id, child);
-        nodes.push(child);
-      }
-      if (!current.children.some((existing) => existing.id === child?.id)) {
-        current.children.push(child);
-      }
-      current = child;
-    });
-    current.isTerminal = true;
-    current.result = 'success';
+  const prunedNodes = nodes.filter((node) => allowedIds.has(node.id));
+  prunedNodes.forEach((node) => {
+    node.children = node.children.filter((child) => allowedIds.has(child.id));
   });
 
-  return { root, nodes };
+  return { root, nodes: prunedNodes };
 }
 
 export function countPaths(
