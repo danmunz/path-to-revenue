@@ -5,7 +5,7 @@ import { Scoreboard } from './components/Scoreboard';
 import { PathTree } from './components/PathTree';
 import { ScenarioCards } from './components/ScenarioCards';
 import { useAppState } from './state/appState';
-import { buildDecisionTree, countPaths } from './domain/decisionTree';
+import { buildDecisionTree, countPaths, formatCurrency } from './domain/decisionTree';
 import { parseSelectionsFromUrl, syncSelectionsToUrl } from './domain/urlState';
 
 function App() {
@@ -62,8 +62,25 @@ function App() {
     [opportunities, selections, revenueTarget, backlogRevenue]
   );
 
+  const secondaryHeader = (
+    <div className="path-tree__header path-tree__header--compact">
+      <div>
+        <h2>Paths to target</h2>
+        <p className="muted">
+          {counts.success.toLocaleString()} winning paths | showing top 20 | Target {formatCurrency(revenueTarget)}
+          {truncatedCount > 0 ? ` | ${truncatedCount} hidden` : ''}
+        </p>
+      </div>
+    </div>
+  );
+
   return (
-    <LayoutShell title="Revenue Path Planner" subtitle="Paths-to-target decision tree" isLoading={isLoading}>
+    <LayoutShell
+      title="Revenue Path Planner"
+      subtitle="Paths-to-target decision tree"
+      isLoading={isLoading}
+      secondaryHeader={secondaryHeader}
+    >
       <ControlStrip opportunities={opportunities} selections={selections} />
       <Scoreboard counts={counts} revenueTarget={revenueTarget} backlogRevenue={backlogRevenue} />
       <PathTree
