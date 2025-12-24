@@ -14,6 +14,7 @@ export type Opportunity = {
   account: string;
   name: string;
   tcv: number;
+  fy26FactoredRevenue: number;
   pWin: number;
   startDate: Date;
   closed: boolean;

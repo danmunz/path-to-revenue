@@ -62,6 +62,8 @@ export function mapRowToOpportunity(row: string[], index: number): Opportunity {
   const name = row[1] ?? `Opportunity ${index + 1}`;
   const tcv = toNumber(row[2]);
   const pWin = normalizePWin(row[3]);
+  const fy26FactoredRevenue =
+    row[7] && row[7].trim() !== '' ? toNumber(row[7]) : tcv * pWin;
   const startDate = row[4] ? new Date(row[4]) : new Date();
   const topPriority = toBoolean(row[5]);
   const portfolioPriority = toBoolean(row[6]) || topPriority;
@@ -75,6 +77,7 @@ export function mapRowToOpportunity(row: string[], index: number): Opportunity {
     account,
     name,
     tcv,
+    fy26FactoredRevenue,
     pWin,
     startDate,
     closed,

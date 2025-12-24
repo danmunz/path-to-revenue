@@ -156,6 +156,7 @@ Required fields (minimum):
 - Ad Hoc TCV
 - PWIN (0–1)
 - Project Start Date
+- 2026 Factored Revenue
 - Closed (boolean)
 - Stage
 - Quarterly revenue fields
@@ -164,6 +165,7 @@ Required fields (minimum):
 - Normalize PWIN to 0–1 internally.
 - Closed opportunities auto‑resolve to Win or Loss.
 - Factored revenue = TCV × PWIN.
+- Use FY26 factored revenue for revenue target accumulation.
 
 ---
 
@@ -470,4 +472,3 @@ Double-click interaction:
 ---
 
 This example is intentionally isomorphic to the NYT “Paths to 270” implementation, with only the domain variables changed.
-

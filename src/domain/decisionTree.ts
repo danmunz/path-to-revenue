@@ -89,7 +89,7 @@ export function buildDecisionTree(
   for (let i = sorted.length - 1; i >= 0; i -= 1) {
     const opportunity = sorted[i];
     const forcedOutcome = getResolvedOutcome(opportunity, selections);
-    const contributes = forcedOutcome === 'loss' ? 0 : opportunity.tcv;
+    const contributes = forcedOutcome === 'loss' ? 0 : opportunity.fy26FactoredRevenue;
     suffixMax[i] = suffixMax[i + 1] + contributes;
   }
   const root = createNode({
@@ -99,7 +99,7 @@ export function buildDecisionTree(
       startingRevenue +
       sorted
         .filter((opp) => getResolvedOutcome(opp, selections) === 'win' && opp.closed)
-        .reduce((sum, opp) => sum + opp.tcv, 0),
+        .reduce((sum, opp) => sum + opp.fy26FactoredRevenue, 0),
     probability: 1,
     resolved: sorted.reduce<Record<string, Outcome>>((acc, opp) => {
       const outcome = getResolvedOutcome(opp, selections);
@@ -147,7 +147,7 @@ export function buildDecisionTree(
       const outcomes: Outcome[] = forcedOutcome ? [forcedOutcome] : ['win', 'loss'];
       outcomes.forEach((outcome) => {
         const nextProbability = probability * branchProbability(opportunity, outcome);
-        const nextRevenue = outcome === 'win' ? revenue + opportunity.tcv : revenue;
+        const nextRevenue = outcome === 'win' ? revenue + opportunity.fy26FactoredRevenue : revenue;
         const nextSteps =
           outcome === 'win'
             ? [
@@ -235,7 +235,7 @@ export function countPaths(
   for (let i = totalOpportunities - 1; i >= 0; i -= 1) {
     const opportunity = ordered[i];
     const forcedOutcome = getResolvedOutcome(opportunity, selections);
-    const contributes = forcedOutcome === 'loss' ? 0 : opportunity.tcv;
+    const contributes = forcedOutcome === 'loss' ? 0 : opportunity.fy26FactoredRevenue;
     suffixMax[i] = suffixMax[i + 1] + contributes;
     const outcomeCount = forcedOutcome ? 1 : 2;
     suffixCombinations[i] = suffixCombinations[i + 1] * outcomeCount;
@@ -266,7 +266,7 @@ export function countPaths(
 
     const result = outcomes.reduce(
       (acc, outcome) => {
-        const nextRevenue = outcome === 'win' ? revenue + opportunity.tcv : revenue;
+        const nextRevenue = outcome === 'win' ? revenue + opportunity.fy26FactoredRevenue : revenue;
         const childCounts = countRemaining(index + 1, nextRevenue);
         return {
           success: acc.success + childCounts.success,

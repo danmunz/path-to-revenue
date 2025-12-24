@@ -28,7 +28,7 @@ export function Scoreboard({ counts, revenueTarget, backlogRevenue }: Scoreboard
           <p className="stat-value">{counts.failure.toLocaleString()}</p>
         </div>
         <div className="scoreboard__stat">
-          <p className="stat-label">Closed-won backlog (FY26)</p>
+          <p className="stat-label">Closed-won backlog (FY26 factored)</p>
           <p className="stat-value">{formatCurrency(backlogRevenue)}</p>
         </div>
         <div className="scoreboard__stat">

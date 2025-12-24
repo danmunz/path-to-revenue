@@ -1,6 +1,6 @@
 import type { DataSourceConfig } from './types';
 
-const DEFAULT_REVENUE_TARGET = 30_000_000;
+const DEFAULT_REVENUE_TARGET = 10_000_000;
 const DEFAULT_CSV_PATH = '/data/opportunities.csv';
 
 function parseNumber(value: string | undefined, fallback: number): number {
