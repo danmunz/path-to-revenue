@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Opportunity } from '../data/types';
-import type { DecisionTree, Outcome, PathCounts, TreeNode } from '../domain/decisionTree';
-import { formatCurrency, getClosedOutcome } from '../domain/decisionTree';
+import type { DecisionTree, Outcome, TreeNode } from '../domain/decisionTree';
+import { getClosedOutcome } from '../domain/decisionTree';
 import { useAppState } from '../state/appState';
-import { Delaunay } from '../vendor/d3-delaunay';
 
 type PathTreeProps = {
   opportunities: Opportunity[];
   tree: DecisionTree;
-  revenueTarget: number;
   slowMotion: boolean;
-  truncatedCount: number;
-  counts: PathCounts;
 };
 
 type PositionedNode = TreeNode & {
@@ -234,9 +230,9 @@ function pathForLink(source: PositionedNode, target: PositionedNode): string {
   return `M ${x0} ${y0} C ${x0 + dx} ${y0}, ${x1 - dx} ${y1}, ${x1} ${y1}`;
 }
 
-function deriveOpacity(opportunity: Opportunity, outcome: Outcome): number {
-  const base = outcome === 'win' ? opportunity.pWin : 1 - opportunity.pWin;
-  return Math.max(0.2, Math.min(base, 0.9));
+function survivabilityRatio(node: TreeNode): number {
+  if (node.totalCount <= 0) return 0;
+  return Math.max(0, Math.min(1, node.successCount / node.totalCount));
 }
 
 function formatMillions(amount = 0): string {
@@ -297,7 +293,7 @@ function wrapLabelText(text: string, maxChars: number, maxLines: number): string
   return trimmed;
 }
 
-export function PathTree({ opportunities, tree, revenueTarget, slowMotion, truncatedCount, counts }: PathTreeProps) {
+export function PathTree({ opportunities, tree, slowMotion }: PathTreeProps) {
   const { setSelection, selections } = useAppState();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -326,7 +322,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const rowHeight = verticalSpan / Math.max(maxDepth, 1);
   const rowOffset = maxDepth === 0 ? verticalSpan / 2 : 0;
   const height = treeHeight;
-  const maxTcv = Math.max(...opportunities.map((opportunity) => opportunity.tcv), 1);
+  const maxTcv = Math.max(...tree.nodes.map((node) => node.opportunity?.tcv ?? 0), 1);
 
   const positionedNodes = useMemo(
     () =>
@@ -356,41 +352,28 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
           target: nodeMap.get(child.id) ?? child,
           outcome: child.outcome ?? 'win',
           opportunity: child.opportunity,
-          probability: child.probability,
+          successCount: child.successCount,
+          totalCount: child.totalCount,
         }))
       ),
     [nodeMap, positionedNodes]
   );
 
-  const delaunay = useMemo(() => {
-    if (links.length === 0) return null;
-    const midpoints = links.map((link) => {
-      const midX = (link.source.x + link.target.x) / 2;
-      const midY = (link.source.y + link.target.y) / 2;
-      return { x: midX, y: midY, id: link.target.id };
-    });
-    return Delaunay.from(
-      midpoints,
-      (point) => point.x,
-      (point) => point.y
-    );
-  }, [links]);
-
   const bestLeafMap = useMemo(() => {
-    const map = new Map<string, { id: string; probability: number }>();
+    const map = new Map<string, { id: string; successCount: number }>();
 
-    function findBestLeaf(node: TreeNode): { id: string; probability: number } {
+    function findBestLeaf(node: TreeNode): { id: string; successCount: number } {
       const cached = map.get(node.id);
       if (cached) return cached;
       if (!node.children.length) {
-        const result = { id: node.id, probability: node.probability };
+        const result = { id: node.id, successCount: node.successCount };
         map.set(node.id, result);
         return result;
       }
       const best = node.children
         .map((child) => findBestLeaf(child))
         .reduce((currentBest, candidate) =>
-          candidate.probability > currentBest.probability ? candidate : currentBest
+          candidate.successCount > currentBest.successCount ? candidate : currentBest
         );
       map.set(node.id, best);
       return best;
@@ -725,7 +708,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     return () => window.removeEventListener('resize', updateHeight);
   }, []);
 
-  const maxProbability = Math.max(...links.map((link) => link.probability), 0.01);
+  const maxSuccessCount = Math.max(...links.map((link) => link.successCount), 1);
   const minStroke = 6;
   const maxStroke = 18;
 
@@ -761,10 +744,18 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     );
   }
 
+  if (tree.root.successCount <= 0) {
+    return (
+      <section className="path-tree">
+        <p className="empty">No goal-reaching futures remain with the current selections.</p>
+      </section>
+    );
+  }
+
   const narrative = (
     <div className="path-tree__narrative">
       <p className={`path-tree__sentence ${hoveredSentence ? 'is-active' : ''}`}>
-        {hoveredSentence ?? 'Hover over the tree to trace a possible path to the target.'}
+        {hoveredSentence ?? 'Hover over the tree to trace a survivable path.'}
       </p>
       {selectedId && (
         <button className="pill pill--compact path-tree__clear" onClick={() => setSelectedId(null)}>
@@ -792,7 +783,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
             }}
             onPointerOut={clearHoverState}
           >
-            <title>Paths to revenue target decision tree</title>
+            <title>Reachable futures survivability map</title>
             <defs>
               <radialGradient id="node-fill" cx="35%" cy="30%" r="70%">
                 <stop offset="0%" stopColor="#c8d8f0" stopOpacity="0.9" />
@@ -819,19 +810,21 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
             </g>
             <g className="path-tree__links">
               {links.map((link) => {
-                const probabilityRatio = Math.max(0, link.probability / maxProbability);
-                const probabilityScale = Math.sqrt(probabilityRatio);
-                const baseOpacity = link.opportunity ? deriveOpacity(link.opportunity, link.outcome) : 0.4;
-                const opacity = Math.min(0.9, baseOpacity * (0.35 + probabilityScale * 0.65));
+                const successRatio = Math.max(0, link.successCount / maxSuccessCount);
+                const successScale = Math.sqrt(successRatio);
+                const targetNode = nodeMap.get(link.target.id) ?? link.target;
+                const survivability = survivabilityRatio(targetNode);
+                const lossEmphasis = link.outcome === 'loss' ? 1.12 : 1;
+                const opacity = Math.min(0.95, 0.25 + survivability * 0.7 + (link.outcome === 'loss' ? 0.08 : 0));
                 const depthRatio = link.source.depth / Math.max(maxDepth || 1, 1);
                 const taper = 1 - depthRatio * 0.5;
-                const strokeWidth = (minStroke + probabilityScale * (maxStroke - minStroke)) * taper;
+                const strokeWidth = (minStroke + successScale * (maxStroke - minStroke)) * taper * lossEmphasis;
                 const path = pathForLink(link.source, link.target);
                 const active = isActivePath(link.target.id);
                 const isSelected = selectedId && link.target.id.startsWith(selectedId);
                 const gradientId = `grad-${link.id}`;
                 const color = link.outcome === 'win' ? 'var(--win)' : 'var(--loss)';
-                const lightColor = link.outcome === 'win' ? '#8fa9d6' : '#d9a0a0';
+                const lightColor = link.outcome === 'win' ? '#89a6d1' : '#d58f90';
                 const inactiveOpacity = Math.max(BASE_INACTIVE_OPACITY, opacity * 0.45);
                 return (
                   <g key={link.id}>
@@ -943,7 +936,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                         labelHovered ? 'path-tree__leaf--label-hover' : ''
                       }`}
                       style={{
-                        opacity: node.opportunity ? 0.35 + node.opportunity.pWin * 0.65 : 0.8,
+                        opacity: node.opportunity ? 0.3 + survivabilityRatio(node) * 0.7 : 0.8,
                       }}
                     />
                   );

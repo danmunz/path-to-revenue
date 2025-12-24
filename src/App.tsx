@@ -11,13 +11,15 @@ import { parseSelectionsFromUrl, syncSelectionsToUrl } from './domain/urlState';
 function App() {
   const {
     hydrateFromRepository,
-    opportunities,
+    priorityOpportunities,
+    otherOpportunities,
     isLoading,
     selections,
     revenueTarget,
     backlogRevenue,
     truncatedCount,
     setSelections,
+    lastAction,
   } = useAppState();
   const [slowMotion, setSlowMotion] = useState(false);
 
@@ -53,22 +55,53 @@ function App() {
     };
   }, []);
 
+  const focusOpportunityId = useMemo(() => {
+    if (priorityOpportunities.length === 0) return null;
+    const findNextUnresolved = (startIndex: number) =>
+      priorityOpportunities.slice(startIndex).find((opportunity) => !selections[opportunity.id])?.id ?? null;
+
+    if (!lastAction) {
+      return findNextUnresolved(0) ?? priorityOpportunities[0].id;
+    }
+
+    if (!lastAction.outcome) {
+      if (priorityOpportunities.some((opportunity) => opportunity.id === lastAction.opportunityId)) {
+        return lastAction.opportunityId;
+      }
+      return findNextUnresolved(0) ?? priorityOpportunities[0].id;
+    }
+
+    const actionIndex = priorityOpportunities.findIndex((opportunity) => opportunity.id === lastAction.opportunityId);
+    if (actionIndex >= 0) {
+      return findNextUnresolved(actionIndex + 1);
+    }
+    return findNextUnresolved(0) ?? priorityOpportunities[0].id;
+  }, [lastAction, priorityOpportunities, selections]);
+
   const decisionTree = useMemo(
-    () => buildDecisionTree(opportunities, selections, revenueTarget, backlogRevenue),
-    [opportunities, selections, revenueTarget, backlogRevenue]
+    () =>
+      buildDecisionTree(
+        priorityOpportunities,
+        otherOpportunities,
+        selections,
+        revenueTarget,
+        backlogRevenue,
+        focusOpportunityId
+      ),
+    [priorityOpportunities, otherOpportunities, selections, revenueTarget, backlogRevenue, focusOpportunityId]
   );
   const counts = useMemo(
-    () => countPaths(opportunities, selections, revenueTarget, backlogRevenue),
-    [opportunities, selections, revenueTarget, backlogRevenue]
+    () => countPaths(priorityOpportunities, otherOpportunities, selections, revenueTarget, backlogRevenue),
+    [priorityOpportunities, otherOpportunities, selections, revenueTarget, backlogRevenue]
   );
 
   const secondaryHeader = (
     <div className="path-tree__header path-tree__header--compact">
       <div>
-        <h2>Paths to target</h2>
+        <h2>Survivability map</h2>
         <p className="muted">
-          {counts.success.toLocaleString()} winning paths | showing top 20 | Target {formatCurrency(revenueTarget)}
-          {truncatedCount > 0 ? ` | ${truncatedCount} hidden` : ''}
+          {counts.success.toLocaleString()} ways to reach goal · Target {formatCurrency(revenueTarget)}
+          {truncatedCount > 0 ? ` · ${truncatedCount} more in reserve` : ''}
         </p>
       </div>
     </div>
@@ -76,22 +109,19 @@ function App() {
 
   return (
     <LayoutShell
-      title="Revenue Path Planner"
-      subtitle="Paths-to-target decision tree"
+      title="Future Survivability Simulator"
+      subtitle="See which priority deals collapse (or preserve) your reachable futures"
       isLoading={isLoading}
       secondaryHeader={secondaryHeader}
     >
-      <ControlStrip opportunities={opportunities} selections={selections} />
+      <ControlStrip opportunities={priorityOpportunities} selections={selections} />
       <Scoreboard counts={counts} revenueTarget={revenueTarget} backlogRevenue={backlogRevenue} />
       <PathTree
-        opportunities={opportunities}
+        opportunities={priorityOpportunities}
         tree={decisionTree}
-        revenueTarget={revenueTarget}
         slowMotion={slowMotion}
-        truncatedCount={truncatedCount}
-        counts={counts}
       />
-      <ScenarioCards opportunities={opportunities} />
+      <ScenarioCards opportunities={priorityOpportunities} />
     </LayoutShell>
   );
 }

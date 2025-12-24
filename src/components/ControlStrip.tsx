@@ -18,8 +18,8 @@ export function ControlStrip({ opportunities, selections }: ControlStripProps) {
       <div className="control-strip__header">
         <div>
           <p className="eyebrow">Control strip</p>
-          <h2>Lock outcomes</h2>
-          <p className="muted">Quickly set win/loss assumptions while keeping the paths in view.</p>
+          <h2>Call priority deals</h2>
+          <p className="muted">Mark deals as won or lost to collapse reachable futures.</p>
         </div>
         {hasSelections && (
           <button type="button" className="button button--ghost" onClick={resetSelections}>
@@ -32,8 +32,11 @@ export function ControlStrip({ opportunities, selections }: ControlStripProps) {
           const closedOutcome = getClosedOutcome(opportunity);
           const selection = selections[opportunity.id];
           const isLocked = Boolean(closedOutcome);
-          const pWinLabel = `${Math.round(opportunity.pWin * 100)}%`;
           const tcvWidth = `${Math.max(6, (opportunity.tcv / maxTcv) * 100)}%`;
+          const priorityLabels = [
+            opportunity.topPriority ? 'Top' : null,
+            !opportunity.topPriority && opportunity.portfolioPriority ? 'Portfolio' : null,
+          ].filter(Boolean) as string[];
 
           return (
             <div key={opportunity.id} className={`control-row ${isLocked ? 'control-row--locked' : ''}`}>
@@ -43,26 +46,37 @@ export function ControlStrip({ opportunities, selections }: ControlStripProps) {
               <div className="control-row__tcv" aria-label={`TCV ${formatCurrency(opportunity.tcv)}`}>
                 <span className="control-row__tcv-bar" style={{ width: tcvWidth }} />
               </div>
-              <div className="control-row__pwin" aria-label={`PWIN ${pWinLabel}`}>
-                <span className="control-row__pwin-dot" style={{ opacity: Math.max(0.3, opportunity.pWin) }} />
-                <span className="control-row__pwin-text">{pWinLabel}</span>
+              <div className="control-row__priority" aria-label={priorityLabels.join(' ')}>
+                {priorityLabels.map((label) => (
+                  <span key={label} className="priority-chip">
+                    {label}
+                  </span>
+                ))}
               </div>
               <div className="control-row__actions">
                 <button
                   type="button"
-                  className={`pill pill--compact ${selection === 'win' ? 'pill--active' : ''}`}
-                  onClick={() => setSelection(opportunity.id, selection === 'win' ? null : 'win')}
+                  className={`pill pill--compact ${!selection ? 'pill--active' : ''}`}
+                  onClick={() => setSelection(opportunity.id, null)}
                   disabled={isLocked}
                 >
-                  Win
+                  Unset
                 </button>
                 <button
                   type="button"
-                  className={`pill pill--compact ${selection === 'loss' ? 'pill--active' : ''}`}
+                  className={`pill pill--compact pill--win ${selection === 'win' ? 'pill--active' : ''}`}
+                  onClick={() => setSelection(opportunity.id, selection === 'win' ? null : 'win')}
+                  disabled={isLocked}
+                >
+                  Won
+                </button>
+                <button
+                  type="button"
+                  className={`pill pill--compact pill--loss ${selection === 'loss' ? 'pill--active' : ''}`}
                   onClick={() => setSelection(opportunity.id, selection === 'loss' ? null : 'loss')}
                   disabled={isLocked}
                 >
-                  Loss
+                  Lost
                 </button>
               </div>
               {isLocked && <span className="status-pill">Closed {closedOutcome}</span>}

@@ -14,7 +14,7 @@ export function LayoutShell({ title, subtitle, isLoading, secondaryHeader, child
       <div className="top-bar-group">
         <header className="top-bar">
           <div>
-            <p className="eyebrow">Revenue Explorer</p>
+            <p className="eyebrow">Survivability Simulator</p>
             <h1>{title}</h1>
             {subtitle && <p className="subtitle">{subtitle}</p>}
           </div>

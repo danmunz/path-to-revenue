@@ -14,7 +14,7 @@ const scenarioCards: ScenarioCard[] = [
   {
     id: 'top-priority-wins',
     title: 'Win all top priority deals',
-    description: 'Assume the top priority opportunities land, leave the rest undecided.',
+    description: 'Call every top priority deal as won and see the remaining futures.',
     apply: (opportunities) =>
       opportunities.reduce<ScenarioSelection>((acc, opportunity) => {
         if (opportunity.topPriority && !getClosedOutcome(opportunity)) {
@@ -26,7 +26,7 @@ const scenarioCards: ScenarioCard[] = [
   {
     id: 'portfolio-wins',
     title: 'Win portfolio priorities',
-    description: 'Lock every portfolio priority deal as a win.',
+    description: 'Assume every portfolio priority deal closes in our favor.',
     apply: (opportunities) =>
       opportunities.reduce<ScenarioSelection>((acc, opportunity) => {
         if (opportunity.portfolioPriority && !getClosedOutcome(opportunity)) {
@@ -38,7 +38,7 @@ const scenarioCards: ScenarioCard[] = [
   {
     id: 'top-priority-losses',
     title: 'Lose the top priorities',
-    description: 'A cautionary view: all top priorities slip, others stay open.',
+    description: 'A cautionary view: top priorities slip, explore what survives.',
     apply: (opportunities) =>
       opportunities.reduce<ScenarioSelection>((acc, opportunity) => {
         if (opportunity.topPriority && !getClosedOutcome(opportunity)) {

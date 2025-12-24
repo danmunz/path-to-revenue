@@ -10,8 +10,8 @@
   --accent: #2563eb;
   --surface: #ffffff;
   --surface-muted: #f8fafc;
-  --win: #2b6cb0;
-  --loss: #c05655;
+  --win: #2563eb;
+  --loss: #b91c1c;
   --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
 }
 
@@ -175,7 +175,7 @@ main {
 
 .control-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 120px 100px auto;
+  grid-template-columns: minmax(180px, 1fr) 120px 120px auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.45rem 0.5rem;
@@ -208,19 +208,21 @@ main {
   border-radius: 999px;
 }
 
-.control-row__pwin {
+.control-row__priority {
   display: flex;
-  align-items: center;
   gap: 0.35rem;
-  font-size: 0.7rem;
-  color: var(--muted);
+  flex-wrap: wrap;
 }
 
-.control-row__pwin-dot {
-  width: 8px;
-  height: 8px;
+.priority-chip {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
   border-radius: 999px;
-  background: #22c55e;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid rgba(148, 163, 184, 0.5);
 }
 
 .control-row__actions {
@@ -244,9 +246,19 @@ main {
 }
 
 .pill--active {
-  background: #1e3a8a;
-  color: #fff;
-  border-color: #1e3a8a;
+  background: #e2e8f0;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.pill--win.pill--active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.pill--loss.pill--active {
+  background: #b91c1c;
+  border-color: #b91c1c;
 }
 
 .pill--compact {
