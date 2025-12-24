@@ -423,8 +423,43 @@ main {
   filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.6));
 }
 
-.path-tree__labels {
+.path-tree__leaf--label-hover {
+  stroke: #1d4ed8;
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 6px rgba(29, 78, 216, 0.5));
+}
+
+.path-tree__leaders {
   pointer-events: none;
+}
+
+.path-tree__leader {
+  fill: none;
+  stroke: rgba(100, 116, 139, 0.75);
+  stroke-width: 1.75px;
+  stroke-linecap: round;
+  opacity: 0.65;
+  transition: opacity 160ms ease, stroke-width 160ms ease;
+}
+
+.path-tree__leader--win {
+  stroke: rgba(37, 99, 235, 0.7);
+}
+
+.path-tree__leader--loss {
+  stroke: rgba(220, 38, 38, 0.6);
+}
+
+.path-tree__leader.is-hovered {
+  opacity: 0.95;
+  stroke-width: 2.75px;
+}
+
+.path-tree__leader.is-dimmed {
+  opacity: 0.18;
+}
+
+.path-tree__labels {
   opacity: 0;
 }
 
@@ -432,9 +467,42 @@ main {
   opacity: 1;
 }
 
+.path-tree__label {
+  cursor: default;
+  pointer-events: all;
+}
+
 .path-tree__label-box {
-  fill: rgba(255, 255, 255, 0.88);
+  fill: rgba(255, 255, 255, 0.96);
+  stroke: rgba(148, 163, 184, 0.6);
+  stroke-width: 1px;
   filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.12));
+}
+
+.path-tree__label.is-hovered .path-tree__label-box {
+  filter: drop-shadow(0 10px 22px rgba(15, 23, 42, 0.2));
+}
+
+.path-tree__label-step {
+  fill: #f1f5f9;
+  stroke: rgba(148, 163, 184, 0.9);
+  stroke-width: 1px;
+}
+
+.path-tree__label-step--win {
+  fill: rgba(37, 99, 235, 0.22);
+  stroke: rgba(37, 99, 235, 0.65);
+}
+
+.path-tree__label-step--loss {
+  fill: rgba(220, 38, 38, 0.22);
+  stroke: rgba(220, 38, 38, 0.65);
+}
+
+.path-tree__label-step-text {
+  font-size: 11px;
+  font-weight: 700;
+  fill: #0f172a;
 }
 
 .path-tree__label-text {
@@ -464,6 +532,27 @@ main {
   background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
   transform: translateY(-2px);
+}
+
+.path-tree__link-trace {
+  fill: none;
+  pointer-events: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 32 220;
+  animation: path-tree-trace 0.9s ease-out 1;
+  opacity: 0.6;
+}
+
+@keyframes path-tree-trace {
+  from {
+    stroke-dashoffset: 64;
+    opacity: 0.1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 0.6;
+  }
 }
 
 .scenario-cards__grid {

@@ -29,9 +29,14 @@ type HoverLabel = {
   name: string;
   tcv?: number;
   outcome: Outcome;
-  distance: number;
-  index: number;
-  total: number;
+  nodeX: number;
+  nodeY: number;
+  nodeRadius: number;
+  rawX: number;
+  rawY: number;
+  side: number;
+  step: number;
+  depth: number;
 };
 
 const COLUMN_WIDTH = 80;
@@ -43,9 +48,142 @@ const LABEL_PADDING_X = 12;
 const LABEL_Y_OFFSET = 8;
 const LABEL_LINE_HEIGHT = 16;
 const LABEL_MAX_LINES = 2;
+const LABEL_STACK_GAP = 8;
+const LABEL_SAFE_MARGIN = 16;
+const MAX_LABEL_OFFSET = 150;
+const LABEL_PATH_CLEARANCE = 8;
+const LABEL_PATH_STEP = 6;
+const LABEL_STEP_RADIUS = 9;
+const LABEL_STEP_GAP = 8;
+const LABEL_TEXT_X = LABEL_PADDING_X + LABEL_STEP_RADIUS * 2 + LABEL_STEP_GAP;
 const FLOW_DASH = '14 10';
 const FLOW_ANIMATION_DURATION = 7.5;
 const BASE_INACTIVE_OPACITY = 0.3;
+const PATH_SAMPLE_STEP = 24;
+
+type PathSegment = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+type Rect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function cubicBezierPoint(
+  t: number,
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number }
+): { x: number; y: number } {
+  const t1 = 1 - t;
+  const t1Squared = t1 * t1;
+  const tSquared = t * t;
+  const x =
+    p0.x * t1Squared * t1 +
+    3 * p1.x * t1Squared * t +
+    3 * p2.x * t1 * tSquared +
+    p3.x * tSquared * t;
+  const y =
+    p0.y * t1Squared * t1 +
+    3 * p1.y * t1Squared * t +
+    3 * p2.y * t1 * tSquared +
+    p3.y * tSquared * t;
+  return { x, y };
+}
+
+function buildLinkSegments(source: { x: number; y: number }, target: { x: number; y: number }): PathSegment[] {
+  const dx = (target.x - source.x) * 0.5;
+  const p0 = { x: source.x, y: source.y };
+  const p1 = { x: source.x + dx, y: source.y };
+  const p2 = { x: target.x - dx, y: target.y };
+  const p3 = { x: target.x, y: target.y };
+  const distance = Math.hypot(target.x - source.x, target.y - source.y);
+  const steps = Math.max(8, Math.ceil(distance / PATH_SAMPLE_STEP));
+  const segments: PathSegment[] = [];
+  let prev = cubicBezierPoint(0, p0, p1, p2, p3);
+  for (let i = 1; i <= steps; i += 1) {
+    const next = cubicBezierPoint(i / steps, p0, p1, p2, p3);
+    segments.push({ x1: prev.x, y1: prev.y, x2: next.x, y2: next.y });
+    prev = next;
+  }
+  return segments;
+}
+
+function pointInRect(point: { x: number; y: number }, rect: Rect): boolean {
+  return (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  );
+}
+
+function onSegment(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): boolean {
+  const epsilon = 1e-6;
+  return (
+    Math.min(a.x, b.x) - epsilon <= c.x &&
+    c.x <= Math.max(a.x, b.x) + epsilon &&
+    Math.min(a.y, b.y) - epsilon <= c.y &&
+    c.y <= Math.max(a.y, b.y) + epsilon
+  );
+}
+
+function orientation(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): number {
+  const value = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+  if (Math.abs(value) < 1e-6) return 0;
+  return value > 0 ? 1 : 2;
+}
+
+function segmentsIntersect(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }): boolean {
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+
+  if (o1 !== o2 && o3 !== o4) return true;
+  if (o1 === 0 && onSegment(a, b, c)) return true;
+  if (o2 === 0 && onSegment(a, b, d)) return true;
+  if (o3 === 0 && onSegment(c, d, a)) return true;
+  if (o4 === 0 && onSegment(c, d, b)) return true;
+  return false;
+}
+
+function segmentIntersectsRect(segment: PathSegment, rect: Rect): boolean {
+  const p1 = { x: segment.x1, y: segment.y1 };
+  const p2 = { x: segment.x2, y: segment.y2 };
+  if (pointInRect(p1, rect) || pointInRect(p2, rect)) return true;
+
+  const left = rect.x;
+  const right = rect.x + rect.width;
+  const top = rect.y;
+  const bottom = rect.y + rect.height;
+  const topLeft = { x: left, y: top };
+  const topRight = { x: right, y: top };
+  const bottomLeft = { x: left, y: bottom };
+  const bottomRight = { x: right, y: bottom };
+
+  return (
+    segmentsIntersect(p1, p2, topLeft, topRight) ||
+    segmentsIntersect(p1, p2, topRight, bottomRight) ||
+    segmentsIntersect(p1, p2, bottomRight, bottomLeft) ||
+    segmentsIntersect(p1, p2, bottomLeft, topLeft)
+  );
+}
+
+function rectIntersectsSegments(rect: Rect, segments: PathSegment[]): boolean {
+  return segments.some((segment) => segmentIntersectsRect(segment, rect));
+}
+
+function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
 
 function computeLayout(nodes: TreeNode[]): Map<string, { x: number; y: number }> {
   const leaves: TreeNode[] = [];
@@ -111,19 +249,37 @@ function wrapLabelText(text: string, maxChars: number, maxLines: number): string
   const lines: string[] = [];
   let current = '';
 
+  const splitLongWord = (word: string): string[] => {
+    if (word.length <= maxChars) return [word];
+    const chunkSize = Math.max(1, maxChars - 1);
+    const chunks: string[] = [];
+    let remaining = word;
+    while (remaining.length > chunkSize) {
+      chunks.push(`${remaining.slice(0, chunkSize)}-`);
+      remaining = remaining.slice(chunkSize);
+    }
+    if (remaining) {
+      chunks.push(remaining);
+    }
+    return chunks;
+  };
+
   words.forEach((word) => {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length <= maxChars) {
-      current = next;
-      return;
-    }
-    if (current) {
-      lines.push(current);
-      current = word;
-      return;
-    }
-    lines.push(word);
-    current = '';
+    const parts = splitLongWord(word);
+    parts.forEach((part) => {
+      const next = current ? `${current} ${part}` : part;
+      if (next.length <= maxChars) {
+        current = next;
+        return;
+      }
+      if (current) {
+        lines.push(current);
+        current = part;
+        return;
+      }
+      lines.push(part);
+      current = '';
+    });
   });
 
   if (current) {
@@ -135,7 +291,9 @@ function wrapLabelText(text: string, maxChars: number, maxLines: number): string
   }
 
   const trimmed = lines.slice(0, maxLines);
-  trimmed[maxLines - 1] = `${trimmed[maxLines - 1].replace(/[.,;:]?$/, '')}...`;
+  const tail = trimmed[maxLines - 1].replace(/[.,;:]?$/, '');
+  const headroom = Math.max(0, maxChars - 3);
+  trimmed[maxLines - 1] = `${tail.slice(0, headroom)}...`;
   return trimmed;
 }
 
@@ -145,9 +303,10 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number } | null>(null);
   const [labelSnapshot, setLabelSnapshot] = useState<HoverLabel[]>([]);
   const [labelsVisible, setLabelsVisible] = useState(false);
+  const [hoveredLabelId, setHoveredLabelId] = useState<string | null>(null);
+  const [traceKey, setTraceKey] = useState(0);
   const [treeHeight, setTreeHeight] = useState<number>(MIN_TREE_HEIGHT);
   const [canvasWidth, setCanvasWidth] = useState<number>(0);
 
@@ -279,6 +438,12 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   }, [hoveredPathIds, selectedPathIds]);
 
   const flowPathIds = useMemo(() => hoveredPathIds ?? selectedPathIds, [hoveredPathIds, selectedPathIds]);
+  const activePathSegments = useMemo(() => {
+    if (!flowPathIds) return [];
+    return links
+      .filter((link) => flowPathIds.has(link.target.id))
+      .flatMap((link) => buildLinkSegments(link.source, link.target));
+  }, [flowPathIds, links]);
 
   const hoveredSentence = useMemo(() => {
     if (!hoveredLeafId) return null;
@@ -339,48 +504,179 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
   const hoveredLabels = useMemo(() => {
     if (!activePathNodes) return null;
     const labels: HoverLabel[] = [];
+    let stepIndex = 0;
 
-    activePathNodes.forEach((node, index) => {
+    activePathNodes.forEach((node) => {
       if (!node.parentId || !node.opportunity || !node.outcome) return;
+      stepIndex += 1;
       const radius = 8 + Math.min(16, (node.opportunity.tcv / maxTcv) * 16);
       const side = node.x < MARGIN.left + (width - MARGIN.left - MARGIN.right) * 0.6 ? 1 : -1;
       const rawX = side > 0 ? node.x + radius + 12 : node.x - radius - 12 - LABEL_WIDTH;
       const rawY = node.y - LABEL_HEIGHT / 2 - LABEL_Y_OFFSET;
-      const clampedX = Math.max(MARGIN.left, Math.min(rawX, width - MARGIN.right - LABEL_WIDTH));
-      const clampedY = Math.max(MARGIN.top, Math.min(rawY, height - MARGIN.bottom - LABEL_HEIGHT));
-      const distance = hoveredPoint ? Math.hypot(node.x - hoveredPoint.x, node.y - hoveredPoint.y) : 0;
 
       labels.push({
         id: node.id,
-        x: clampedX,
-        y: clampedY,
+        x: rawX,
+        y: rawY,
         width: LABEL_WIDTH,
         height: LABEL_HEIGHT,
         name: node.opportunity.name,
         tcv: node.opportunity.tcv,
         outcome: node.outcome,
-        distance,
-        index,
-        total: activePathNodes.length,
+        nodeX: node.x,
+        nodeY: node.y,
+        nodeRadius: radius,
+        rawX,
+        rawY,
+        side,
+        step: stepIndex,
+        depth: node.depth,
       });
     });
 
-    labels.sort((a, b) => a.distance - b.distance);
+    if (!labels.length) return labels;
 
-    const accepted: HoverLabel[] = [];
-    labels.forEach((label) => {
-      const overlaps = accepted.some((other) => {
-        const withinX = label.x < other.x + other.width && label.x + label.width > other.x;
-        const withinY = label.y < other.y + other.height && label.y + label.height > other.y;
-        return withinX && withinY;
+    const minX = MARGIN.left + LABEL_SAFE_MARGIN;
+    const maxX = Math.max(minX, width - MARGIN.right - LABEL_WIDTH - LABEL_SAFE_MARGIN);
+    const clampValue = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
+    const clampX = (value: number) => clampValue(value, minX, maxX);
+    const median = (values: number[]) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    };
+
+    const rectIntersectsPath = (rect: Rect) =>
+      rectIntersectsSegments(rect, activePathSegments);
+    const resolveRawX = (label: HoverLabel, side: number) =>
+      side > 0
+        ? label.nodeX + label.nodeRadius + 12
+        : label.nodeX - label.nodeRadius - 12 - LABEL_WIDTH;
+
+    function stackColumn(columnLabels: HoverLabel[], columnX: number, minY: number, maxBottom: number) {
+      if (!columnLabels.length) return;
+      const sorted = [...columnLabels].sort((a, b) => a.depth - b.depth);
+      let cursor = minY;
+      const maxY = maxBottom - LABEL_HEIGHT;
+      const failed: HoverLabel[] = [];
+
+      sorted.forEach((label) => {
+        const minAllowed =
+          label.side > 0 ? label.rawX : label.nodeX - LABEL_WIDTH - MAX_LABEL_OFFSET;
+        const maxAllowed =
+          label.side > 0 ? label.nodeX + MAX_LABEL_OFFSET : label.rawX;
+        let nextX = clampValue(columnX, minAllowed, maxAllowed);
+        const safeX = clampX(nextX);
+        if (safeX >= minAllowed && safeX <= maxAllowed) {
+          nextX = safeX;
+        }
+        label.x = nextX;
+        const baseY = clampValue(label.rawY, minY, maxY);
+        let candidateY = Math.max(baseY, cursor);
+        while (candidateY <= maxY) {
+          const rect: Rect = {
+            x: label.x - LABEL_PATH_CLEARANCE,
+            y: candidateY - LABEL_PATH_CLEARANCE,
+            width: label.width + LABEL_PATH_CLEARANCE * 2,
+            height: label.height + LABEL_PATH_CLEARANCE * 2,
+          };
+          if (!rectIntersectsPath(rect)) {
+            break;
+          }
+          candidateY += LABEL_PATH_STEP;
+        }
+
+        if (candidateY > maxY) {
+          failed.push(label);
+          label.y = baseY;
+          return;
+        }
+
+        label.y = candidateY;
+        cursor = label.y + LABEL_HEIGHT + LABEL_STACK_GAP;
       });
-      if (!overlaps) {
-        accepted.push(label);
+
+      return failed;
+    }
+
+    function resolveOverlaps(columnLabels: HoverLabel[], minY: number, maxBottom: number) {
+      if (!columnLabels.length) return [];
+      const maxY = maxBottom - LABEL_HEIGHT;
+      const placed: HoverLabel[] = [];
+      const failed: HoverLabel[] = [];
+      const padding = LABEL_STACK_GAP;
+
+      const sorted = [...columnLabels].sort((a, b) => a.depth - b.depth);
+      sorted.forEach((label) => {
+        let candidateY = clampValue(label.y, minY, maxY);
+        while (candidateY <= maxY) {
+          const rect: Rect = {
+            x: label.x - LABEL_PATH_CLEARANCE,
+            y: candidateY - LABEL_PATH_CLEARANCE,
+            width: label.width + LABEL_PATH_CLEARANCE * 2,
+            height: label.height + LABEL_PATH_CLEARANCE * 2,
+          };
+          const overlapLabel = placed.some((other) =>
+            rectsOverlap(
+              rect,
+              {
+                x: other.x - padding,
+                y: other.y - padding,
+                width: other.width + padding * 2,
+                height: other.height + padding * 2,
+              }
+            )
+          );
+          if (!overlapLabel && !rectIntersectsPath(rect)) {
+            break;
+          }
+          candidateY += LABEL_PATH_STEP;
+        }
+        if (candidateY > maxY) {
+          failed.push(label);
+          return;
+        }
+        label.y = candidateY;
+        placed.push(label);
+      });
+      return failed;
+    }
+
+    const tryPlace = (useSafeMargin: boolean) => {
+      const safeMargin = useSafeMargin ? LABEL_SAFE_MARGIN : 0;
+      const minY = MARGIN.top + safeMargin;
+      const maxBottom = height - MARGIN.bottom - safeMargin;
+
+      const rightSide = labels.filter((label) => label.side > 0);
+      const leftSide = labels.filter((label) => label.side < 0);
+      const rightColumnX = clampX(rightSide.length ? median(rightSide.map((label) => label.rawX)) : maxX);
+      const leftColumnX = clampX(leftSide.length ? median(leftSide.map((label) => label.rawX)) : minX);
+
+      const rightFailed = stackColumn(rightSide, rightColumnX, minY, maxBottom) ?? [];
+      const leftFailed = stackColumn(leftSide, leftColumnX, minY, maxBottom) ?? [];
+      const failedSet = new Set<string>([...rightFailed, ...leftFailed].map((label) => label.id));
+      const resolvedFailed = resolveOverlaps(
+        labels.filter((label) => !failedSet.has(label.id)),
+        minY,
+        maxBottom
+      );
+      return [...rightFailed, ...leftFailed, ...resolvedFailed];
+    };
+
+    const failedFirstPass = tryPlace(true);
+    if (failedFirstPass.length > 0) {
+      failedFirstPass.forEach((label) => {
+        label.side *= -1;
+        label.rawX = resolveRawX(label, label.side);
+      });
+      const failedSecondPass = tryPlace(true);
+      if (failedSecondPass.length > 0) {
+        tryPlace(false);
       }
-    });
+    }
 
-    return accepted;
-  }, [activePathNodes, height, hoveredPoint, maxTcv, width]);
+    return labels;
+  }, [activePathNodes, activePathSegments, height, maxTcv, width]);
 
   useEffect(() => {
     if (hoveredLabels && hoveredLabels.length > 0) {
@@ -392,6 +688,17 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
     setLabelSnapshot([]);
     return undefined;
   }, [hoveredLabels]);
+
+  useEffect(() => {
+    if (labelsVisible) {
+      setTraceKey((prev) => prev + 1);
+      if (hoveredLabelId && !labelSnapshot.some((label) => label.id === hoveredLabelId)) {
+        setHoveredLabelId(null);
+      }
+      return;
+    }
+    setHoveredLabelId(null);
+  }, [hoveredLabelId, labelSnapshot, labelsVisible]);
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -432,7 +739,6 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
 
   function clearHoverState() {
     setHoveredId(null);
-    setHoveredPoint(null);
   }
 
   function handleDoubleClick(node: TreeNode) {
@@ -573,13 +879,49 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                       className="path-tree__hit"
                       onPointerEnter={() => {
                         setHoveredId(link.target.id);
-                        setHoveredPoint({ x: link.target.x, y: link.target.y });
                       }}
-                      onPointerLeave={clearHoverState}
                       onClick={() => setSelectedId(link.target.id)}
                       onDoubleClick={() => handleDoubleClick(link.target)}
                     />
                   </g>
+                );
+              })}
+              {labelsVisible && flowPathIds ? (
+                <g key={`trace-${traceKey}`} className="path-tree__traces">
+                  {links
+                    .filter((link) => flowPathIds.has(link.target.id))
+                    .map((link) => {
+                      const tracePath = pathForLink(link.source, link.target);
+                      const color = link.outcome === 'win' ? 'var(--win)' : 'var(--loss)';
+                      return (
+                        <path
+                          key={`trace-${link.id}`}
+                          d={tracePath}
+                          className="path-tree__link-trace"
+                          style={{
+                            stroke: color,
+                            strokeWidth: Math.max(1.5, minStroke * 0.35),
+                          }}
+                        />
+                      );
+                    })}
+                </g>
+              ) : null}
+            </g>
+            <g className="path-tree__leaders">
+              {labelSnapshot.map((label) => {
+                const leaderX = label.side > 0 ? label.x : label.x + label.width;
+                const leaderY = label.y + label.height / 2;
+                const isHovered = hoveredLabelId === label.id;
+                const isDimmed = Boolean(hoveredLabelId && !isHovered);
+                return (
+                  <path
+                    key={`leader-${label.id}`}
+                    d={`M ${label.nodeX} ${label.nodeY} L ${leaderX} ${leaderY}`}
+                    className={`path-tree__leader ${
+                      label.outcome === 'win' ? 'path-tree__leader--win' : 'path-tree__leader--loss'
+                    } ${isHovered ? 'is-hovered' : ''} ${isDimmed ? 'is-dimmed' : ''}`}
+                  />
                 );
               })}
             </g>
@@ -589,6 +931,7 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                 .map((node) => {
                   const success =
                     node.result === 'success' && Boolean(hoveredPathIds && hoveredPathIds.has(node.id));
+                  const labelHovered = hoveredLabelId === node.id;
                   const radius = node.opportunity ? 8 + Math.min(16, (node.opportunity.tcv / maxTcv) * 16) : 6;
                   return (
                     <circle
@@ -596,7 +939,9 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                       cx={node.x}
                       cy={node.y}
                       r={radius}
-                      className={`path-tree__leaf ${success ? 'path-tree__leaf--success' : ''}`}
+                      className={`path-tree__leaf ${success ? 'path-tree__leaf--success' : ''} ${
+                        labelHovered ? 'path-tree__leaf--label-hover' : ''
+                      }`}
                       style={{
                         opacity: node.opportunity ? 0.35 + node.opportunity.pWin * 0.65 : 0.8,
                       }}
@@ -608,11 +953,18 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
               {labelSnapshot.map((label) => {
                 const millions = formatMillions(label.tcv ?? 0);
                 const text = `${label.name} (${millions})`;
-                const maxChars = Math.max(14, Math.floor((LABEL_WIDTH - LABEL_PADDING_X * 2) / 7));
+                const textWidth = LABEL_WIDTH - LABEL_TEXT_X - LABEL_PADDING_X;
+                const maxChars = Math.max(12, Math.floor(textWidth / 7));
                 const lines = wrapLabelText(text, maxChars, LABEL_MAX_LINES);
                 const startY = label.height / 2 - ((lines.length - 1) * LABEL_LINE_HEIGHT) / 2;
                 return (
-                  <g key={label.id} transform={`translate(${label.x}, ${label.y})`}>
+                  <g
+                    key={label.id}
+                    className={`path-tree__label ${hoveredLabelId === label.id ? 'is-hovered' : ''}`}
+                    transform={`translate(${label.x}, ${label.y})`}
+                    onPointerEnter={() => setHoveredLabelId(label.id)}
+                    onPointerLeave={() => setHoveredLabelId((current) => (current === label.id ? null : current))}
+                  >
                     <rect
                       className="path-tree__label-box"
                       width={label.width}
@@ -620,9 +972,26 @@ export function PathTree({ opportunities, tree, revenueTarget, slowMotion, trunc
                       rx={12}
                       ry={12}
                     />
+                    <circle
+                      className={`path-tree__label-step ${
+                        label.outcome === 'win' ? 'path-tree__label-step--win' : 'path-tree__label-step--loss'
+                      }`}
+                      cx={LABEL_PADDING_X + LABEL_STEP_RADIUS}
+                      cy={label.height / 2}
+                      r={LABEL_STEP_RADIUS}
+                    />
+                    <text
+                      className="path-tree__label-step-text"
+                      x={LABEL_PADDING_X + LABEL_STEP_RADIUS}
+                      y={label.height / 2}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
+                      {label.step}
+                    </text>
                     <text className="path-tree__label-text">
                       {lines.map((line, index) => (
-                        <tspan key={`${label.id}-line-${index}`} x={LABEL_PADDING_X} y={startY + index * LABEL_LINE_HEIGHT}>
+                        <tspan key={`${label.id}-line-${index}`} x={LABEL_TEXT_X} y={startY + index * LABEL_LINE_HEIGHT}>
                           {line}
                         </tspan>
                       ))}
